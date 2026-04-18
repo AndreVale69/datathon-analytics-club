@@ -24,6 +24,15 @@ services:
       - api
     volumes:
       - .:/app
+  tests:
+    build:
+      context: .
+    command: pytest
+    environment:
+      LISTINGS_RAW_DATA_DIR: /app/raw_data
+      LISTINGS_DB_PATH: /tmp/listings.db
+    volumes:
+      - .:/app
 
 volumes:
   listings_data:
