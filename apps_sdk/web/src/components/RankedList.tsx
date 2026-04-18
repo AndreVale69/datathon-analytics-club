@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type ListingData = {
   id: string;
@@ -55,6 +55,12 @@ export default function RankedList({
 }: RankedListProps) {
   const [imageIndexes, setImageIndexes] = useState<Record<string, number>>({});
   const touchStartXRef = useRef<Record<string, number>>({});
+  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  useEffect(() => {
+    if (!selectedId) return;
+    cardRefs.current[selectedId]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [selectedId]);
 
   return (
     <div className="ranked-list">
@@ -100,6 +106,7 @@ export default function RankedList({
             className={`listing-card ${
               hoveredId === result.listing_id || selectedId === result.listing_id ? "selected" : ""
             }`}
+            ref={(el) => { cardRefs.current[result.listing_id] = el; }}
             onClick={() => onSelect(result.listing_id)}
             onMouseEnter={() => onHover(result.listing_id)}
             onMouseLeave={() => onHover(null)}
