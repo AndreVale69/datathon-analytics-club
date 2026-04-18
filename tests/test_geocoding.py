@@ -12,7 +12,11 @@ from app.core.hard_filters import HardFilterParams, _distance_km, search_listing
 from app.harness.csv_import import create_schema
 from app.models.schemas import HardFilters, QueryConstraints
 from app.participant.constraint_extractor import extract_constraints
-from app.participant.geolocation_extractor import GeolocationConstraints, GeolocationIntent
+from app.participant.geolocation_extractor import (
+    GeocodingQuery,
+    GeolocationConstraints,
+    GeolocationIntent,
+)
 from app.participant.ranking import rank_listings
 
 
@@ -92,6 +96,49 @@ def test_geocode_place_parses_geoadmin_location_payload(monkeypatch) -> None:
     )
 
 
+def test_geocode_place_returns_different_coordinates_for_different_places(monkeypatch) -> None:
+    responses = {
+        "ETH Zurich": {
+            "results": [
+                {
+                    "attrs": {
+                        "label": "<b>ETH Zurich</b>",
+                        "lat": 47.3763,
+                        "lon": 8.5476,
+                    }
+                }
+            ]
+        },
+        "Lausanne station": {
+            "results": [
+                {
+                    "attrs": {
+                        "label": "<b>Lausanne station</b>",
+                        "lat": 46.5160,
+                        "lon": 6.6290,
+                    }
+                }
+            ]
+        },
+    }
+
+    def fake_get(url: str, *, params: dict[str, object], timeout: float) -> httpx.Response:
+        query = str(params["searchText"])
+        request = httpx.Request("GET", url, params=params)
+        return httpx.Response(200, request=request, json=responses[query])
+
+    monkeypatch.setattr("app.core.geocoding.httpx.get", fake_get)
+
+    eth = geocode_place("ETH Zurich")
+    lausanne = geocode_place("Lausanne station")
+
+    assert eth is not None
+    assert lausanne is not None
+    assert eth.label == "ETH Zurich"
+    assert lausanne.label == "Lausanne station"
+    assert (eth.latitude, eth.longitude) != (lausanne.latitude, lausanne.longitude)
+
+
 def test_extract_constraints_resolves_hard_place_to_coordinates(monkeypatch) -> None:
     def fake_llm_extract(query: str):
         assert query == "bright apartment near Zurich HB with balcony"
@@ -137,7 +184,9 @@ def test_enrich_constraints_with_geolocation_preserves_explicit_radius(monkeypat
     monkeypatch.setattr(
         "app.participant.geolocation_extractor.extract_geolocation_constraints",
         lambda query: GeolocationConstraints(
-            hard=GeolocationIntent(geocoding_query="Lausanne station", radius_km=1.5),
+            hard=GeolocationIntent(
+                places=[GeocodingQuery(query="Lausanne station", radius_km=1.5)]
+            ),
             soft=GeolocationIntent(),
         ),
     )
