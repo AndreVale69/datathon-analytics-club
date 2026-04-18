@@ -27,6 +27,8 @@ services:
   tests:
     build:
       context: .
+    profiles:
+      - test
     command: pytest
     environment:
       LISTINGS_RAW_DATA_DIR: /app/raw_data
