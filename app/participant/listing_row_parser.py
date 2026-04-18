@@ -36,17 +36,53 @@ def _parse_float(value: str | None) -> float | None:
         return None
 
 def _normalize_city(city: str | None) -> str | None:
-    city_lower = city.lower()
+    if not city:
+        return city
+
+    city_clean = city.strip()
+    city_lower = city_clean.lower()
 
     mapping = {
         "zurich": "Zürich",
+        "zürich": "Zürich",
+
         "geneve": "Genève",
+        "genève": "Genève",
+
         "lausanne": "Lausanne",
         "nyon": "Nyon",
         "sion": "Sion",
+        "crissier": "Crissier",
+        "chur": "Chur",
+        "grand-lancy": "Grand-Lancy",
+        "st-maurice": "St-Maurice",
+        "opfikon": "Opfikon",
+        "belmont-sur-lausanne": "Belmont-sur-Lausanne",
+
+        "brugg": "Brugg",
+        "brügg": "Brugg",
+
+        "penthalaz": "Penthalaz",
+        "renens": "Renens",
+
+        "kusnacht": "Küsnacht",
+        "küsnacht": "Küsnacht",
+
+        "bramois": "Bramois",
+
+        "echandens": "Echandens",
+        "échandens": "Echandens",
+
+        "lucens": "Lucens",
+        "perly": "Perly",
+        "lostorf": "Lostorf",
     }
 
-    city = mapping.get(city_lower, city)
+    city = mapping.get(city_lower, city_clean)
+
+    if city.isdigit():
+        return None
+
     return city
 
 def _parse_int(value: str | None) -> int | None:
