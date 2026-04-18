@@ -3,106 +3,150 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from app.models.schemas import ListingData, RankedListingResult
+from app.core.hard_filters import _distance_km
+from app.models.schemas import HardFilters, ListingData, RankedListingResult
 
-def compute_score(listing, soft_facts):
-    score = 0
-
-    price = listing.get("price")
-    rooms = listing.get("rooms")
-
-    if price is None or price < 300 or price > 10000:
-        return 0
-    if rooms is None or rooms < 1 or rooms > 10:
-        return 0
-
-    score += max(0, 3000 - price) / 3000
-
-    score += min(rooms, 5) / 5
-
-    dist = listing.get("distance_public_transport")
-    if dist is not None:
-        score += max(0, 300 - dist) / 300
-
-    if listing.get("feature_balcony") == 1:
-        score += 1
-    if listing.get("feature_parking") == 1:
-        score += 0.5
-
-    desc = (listing.get("description") or "").lower()
-    for keyword in soft_facts.get("keywords", []):
-        if keyword in desc:
-            score += 2
-
-    return score
 
 def rank_listings(
     candidates: list[dict[str, Any]],
-    soft_facts: dict[str, Any],
+    soft: HardFilters,
 ) -> list[RankedListingResult]:
-    # Intentionally stubbed. Teams can replace this with a scoring or
-    # reranking stage that uses the soft_facts payload.
-    results = []
-
-    for candidate in candidates:
-        score = compute_score(candidate, soft_facts)
-
-        results.append(
-            RankedListingResult(
-                listing_id=str(candidate["listing_id"]),
-                score=score,
-                reason=f"Score={score:.2f}",
-                listing=_to_listing_data(candidate),
-            )
+    results = [
+        RankedListingResult(
+            listing_id=str(c["listing_id"]),
+            score=_score(c, soft),
+            reason=_reason(c, soft),
+            listing=_to_listing_data(c),
         )
-
+        for c in candidates
+    ]
     return sorted(results, key=lambda x: x.score, reverse=True)
 
 
-def _to_listing_data(candidate: dict[str, Any]) -> ListingData:
+def _score(listing: dict[str, Any], soft: HardFilters) -> float:
+    score = 0.0
+
+    # ── Price proximity ───────────────────────────────────────────────────────
+    price = listing.get("price")
+    if price and soft.max_price:
+        # Reward listings well under the soft price ceiling
+        score += max(0.0, 1.0 - price / soft.max_price)
+    elif price and 300 <= price <= 10000:
+        # Generic reward for reasonable price
+        score += max(0.0, (10000 - price) / 10000) * 0.3
+
+    # ── Rooms proximity ───────────────────────────────────────────────────────
+    rooms = listing.get("rooms")
+    if rooms and soft.min_rooms:
+        score += max(0.0, 1.0 - abs(rooms - soft.min_rooms) / soft.min_rooms) * 0.5
+
+    # ── Area proximity ────────────────────────────────────────────────────────
+    area = listing.get("area")
+    if area and soft.min_area:
+        score += max(0.0, 1.0 - abs(area - soft.min_area) / soft.min_area) * 0.3
+
+    # ── City preference ───────────────────────────────────────────────────────
+    if soft.city:
+        city = (listing.get("city") or "").lower()
+        if any(city == c.lower() for c in soft.city):
+            score += 1.0
+
+    # ── Feature preferences ───────────────────────────────────────────────────
+    if soft.features:
+        for feat in soft.features:
+            col = f"feature_{feat}"
+            if listing.get(col) == 1:
+                score += 0.5
+
+    # ── Transport proximity ───────────────────────────────────────────────────
+    dist_pt = listing.get("distance_public_transport")
+    if dist_pt is not None:
+        score += max(0.0, (500 - dist_pt) / 500) * 0.4
+
+    # ── Soft geolocation preference ───────────────────────────────────────────
+    listing_lat = listing.get("latitude")
+    listing_lon = listing.get("longitude")
+    if (
+        listing_lat is not None
+        and listing_lon is not None
+        and soft.latitude is not None
+        and soft.longitude is not None
+    ):
+        dist_km = _distance_km(soft.latitude, soft.longitude, listing_lat, listing_lon)
+        if soft.radius_km:
+            score += max(0.0, 1.0 - dist_km / soft.radius_km) * 1.2
+        else:
+            score += max(0.0, 1.0 - dist_km / 15.0) * 0.8
+
+    return round(score, 4)
+
+
+def _reason(listing: dict[str, Any], soft: HardFilters) -> str:
+    parts = []
+    price = listing.get("price")
+    if price and soft.max_price and price <= soft.max_price:
+        parts.append(f"price {price} CHF within budget")
+    if soft.features:
+        matched = [f for f in soft.features if listing.get(f"feature_{f}") == 1]
+        if matched:
+            parts.append(f"has preferred features: {', '.join(matched)}")
+    if soft.city:
+        city = listing.get("city", "")
+        if any(city.lower() == c.lower() for c in soft.city):
+            parts.append(f"in preferred city {city}")
+    if (
+        listing.get("latitude") is not None
+        and listing.get("longitude") is not None
+        and soft.latitude is not None
+        and soft.longitude is not None
+    ):
+        dist_km = _distance_km(
+            soft.latitude,
+            soft.longitude,
+            listing["latitude"],
+            listing["longitude"],
+        )
+        parts.append(f"{dist_km:.1f} km from preferred location")
+    return "; ".join(parts) if parts else "matched hard filters"
+
+
+def _to_listing_data(c: dict[str, Any]) -> ListingData:
     return ListingData(
-        id=str(candidate["listing_id"]),
-        title=candidate["title"],
-        description=candidate.get("description"),
-        street=candidate.get("street"),
-        city=candidate.get("city"),
-        postal_code=candidate.get("postal_code"),
-        canton=candidate.get("canton"),
-        latitude=candidate.get("latitude"),
-        longitude=candidate.get("longitude"),
-        price_chf=candidate.get("price"),
-        rooms=candidate.get("rooms"),
-        living_area_sqm=_coerce_int(candidate.get("area")),
-        available_from=candidate.get("available_from"),
-        image_urls=_coerce_image_urls(candidate.get("image_urls")),
-        hero_image_url=candidate.get("hero_image_url"),
-        original_listing_url=candidate.get("original_url"),
-        features=candidate.get("features") or [],
-        offer_type=candidate.get("offer_type"),
-        object_category=candidate.get("object_category"),
-        object_type=candidate.get("object_type"),
+        id=str(c["listing_id"]),
+        title=c["title"],
+        description=c.get("description"),
+        street=c.get("street"),
+        city=c.get("city"),
+        postal_code=c.get("postal_code"),
+        canton=c.get("canton"),
+        latitude=c.get("latitude"),
+        longitude=c.get("longitude"),
+        price_chf=c.get("price"),
+        rooms=c.get("rooms"),
+        living_area_sqm=c.get("area"),
+        available_from=c.get("available_from"),
+        image_urls=_coerce_image_urls(c.get("image_urls")),
+        hero_image_url=c.get("hero_image_url"),
+        original_listing_url=c.get("original_url"),
+        features=c.get("features") or [],
+        offer_type=c.get("offer_type"),
+        object_category=c.get("object_category"),
+        object_type=c.get("object_type"),
+        distance_public_transport=c.get("distance_public_transport"),
+        distance_shop=c.get("distance_shop"),
     )
-
-
-def _coerce_int(value: Any) -> int | None:
-    if value is None:
-        return None
-    try:
-        return int(round(float(value)))
-    except (TypeError, ValueError):
-        return None
 
 
 def _coerce_image_urls(value: Any) -> list[str] | None:
     if value is None:
         return None
     if isinstance(value, list):
-        return [str(item) for item in value]
+        return [str(i) for i in value]
     if isinstance(value, str):
         try:
             parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return [str(i) for i in parsed]
         except json.JSONDecodeError:
             return [value]
-        if isinstance(parsed, list):
-            return [str(item) for item in parsed]
     return None

@@ -10,8 +10,10 @@ from fastapi.testclient import TestClient
 from app.core.geocoding import GeocodedPlace, geocode_place
 from app.core.hard_filters import HardFilterParams, _distance_km, search_listings
 from app.harness.csv_import import create_schema
-from app.participant.geolocation_extractor import GeolocationIntent
-from app.participant.hard_fact_extraction import extract_hard_facts
+from app.models.schemas import HardFilters, QueryConstraints
+from app.participant.constraint_extractor import extract_constraints
+from app.participant.geolocation_extractor import GeolocationConstraints, GeolocationIntent
+from app.participant.ranking import rank_listings
 
 
 def build_test_database(tmp_path: Path) -> Path:
@@ -90,71 +92,71 @@ def test_geocode_place_parses_geoadmin_location_payload(monkeypatch) -> None:
     )
 
 
-def test_extract_hard_facts_resolves_near_place_to_coordinates(monkeypatch) -> None:
-    def fake_extract_constraints(query: str):
+def test_extract_constraints_resolves_hard_place_to_coordinates(monkeypatch) -> None:
+    def fake_llm_extract(query: str):
         assert query == "bright apartment near Zurich HB with balcony"
-        return HardFilters()
+        return QueryConstraints(hard=HardFilters(), soft=HardFilters())
 
-    def fake_extract_geolocation_intent(query: str) -> GeolocationIntent:
+    def fake_extract_geolocation_constraints(query: str) -> GeolocationConstraints:
         assert query == "bright apartment near Zurich HB with balcony"
-        return GeolocationIntent(geocoding_query="Zurich HB", radius_km=3.0)
+        return GeolocationConstraints(
+            hard=GeolocationIntent(geocoding_query="Zurich HB", radius_km=3.0),
+            soft=GeolocationIntent(),
+        )
 
     def fake_geocode(place: str) -> GeocodedPlace | None:
         assert place == "Zurich HB"
         return GeocodedPlace(label=place, latitude=47.378177, longitude=8.540192)
 
-    from app.models.schemas import HardFilters
-
     monkeypatch.setattr(
-        "app.participant.hard_fact_extraction.extract_constraints",
-        fake_extract_constraints,
+        "app.participant.constraint_extractor.extractor._extractor",
+        type("StubExtractor", (), {"invoke": staticmethod(lambda payload: {"hard": {}, "soft": {}})})(),
     )
     monkeypatch.setattr(
-        "app.participant.hard_fact_extraction.extract_geolocation_intent",
-        fake_extract_geolocation_intent,
+        "app.participant.constraint_extractor.extractor.enrich_constraints_with_geolocation",
+        lambda query, constraints: QueryConstraints(
+            hard=HardFilters(latitude=47.378177, longitude=8.540192, radius_km=3.0),
+            soft=constraints.soft,
+        ),
     )
-    monkeypatch.setattr("app.participant.hard_fact_extraction.geocode_place", fake_geocode)
 
-    hard_filters = extract_hard_facts("bright apartment near Zurich HB with balcony")
+    constraints = extract_constraints("bright apartment near Zurich HB with balcony")
 
-    assert hard_filters.latitude == 47.378177
-    assert hard_filters.longitude == 8.540192
-    assert hard_filters.radius_km == 3.0
+    assert constraints.hard.latitude == 47.378177
+    assert constraints.hard.longitude == 8.540192
+    assert constraints.hard.radius_km == 3.0
 
 
-def test_extract_hard_facts_preserves_explicit_radius(monkeypatch) -> None:
-    from app.models.schemas import HardFilters
-
+def test_enrich_constraints_with_geolocation_preserves_explicit_radius(monkeypatch) -> None:
     seen: list[str] = []
-
-    def fake_extract_constraints(query: str) -> HardFilters:
-        assert query == "studio within 1.5 km of Lausanne station under 2500 CHF"
-        return HardFilters()
-
-    def fake_extract_geolocation_intent(query: str) -> GeolocationIntent:
-        assert query == "studio within 1.5 km of Lausanne station under 2500 CHF"
-        return GeolocationIntent(geocoding_query="Lausanne station", radius_km=1.5)
 
     def fake_geocode(place: str) -> GeocodedPlace | None:
         seen.append(place)
         return GeocodedPlace(label=place, latitude=46.5197, longitude=6.6323)
 
     monkeypatch.setattr(
-        "app.participant.hard_fact_extraction.extract_constraints",
-        fake_extract_constraints,
+        "app.participant.geolocation_extractor.extract_geolocation_constraints",
+        lambda query: GeolocationConstraints(
+            hard=GeolocationIntent(geocoding_query="Lausanne station", radius_km=1.5),
+            soft=GeolocationIntent(),
+        ),
     )
     monkeypatch.setattr(
-        "app.participant.hard_fact_extraction.extract_geolocation_intent",
-        fake_extract_geolocation_intent,
+        "app.participant.geolocation_extractor.geocode_place",
+        fake_geocode,
     )
-    monkeypatch.setattr("app.participant.hard_fact_extraction.geocode_place", fake_geocode)
 
-    hard_filters = extract_hard_facts("studio within 1.5 km of Lausanne station under 2500 CHF")
+    from app.participant.geolocation_extractor import enrich_constraints_with_geolocation
+
+    constraints = enrich_constraints_with_geolocation(
+        "studio within 1.5 km of Lausanne station under 2500 CHF",
+        QueryConstraints(),
+    )
 
     assert seen == ["Lausanne station"]
-    assert hard_filters.latitude == 46.5197
-    assert hard_filters.longitude == 6.6323
-    assert hard_filters.radius_km == 1.5
+    assert constraints.hard.latitude == 46.5197
+    assert constraints.hard.longitude == 6.6323
+    assert constraints.hard.radius_km == 1.5
 
 
 def test_query_endpoint_filters_results_around_geocoded_place(
@@ -177,17 +179,17 @@ def test_query_endpoint_filters_results_around_geocoded_place(
             longitude=float(seed["longitude"]),
         )
 
-    from app.models.schemas import HardFilters
-
     monkeypatch.setattr(
-        "app.participant.hard_fact_extraction.extract_constraints",
-        lambda query: HardFilters(),
+        "app.participant.constraint_extractor.extractor._extractor",
+        type("StubExtractor", (), {"invoke": staticmethod(lambda payload: {"hard": {}, "soft": {}})})(),
     )
     monkeypatch.setattr(
-        "app.participant.hard_fact_extraction.extract_geolocation_intent",
-        lambda query: GeolocationIntent(geocoding_query="Winterthur station", radius_km=3.0),
+        "app.participant.constraint_extractor.extractor.enrich_constraints_with_geolocation",
+        lambda query, constraints: QueryConstraints(
+            hard=HardFilters(latitude=seed["latitude"], longitude=seed["longitude"], radius_km=3.0),
+            soft=constraints.soft,
+        ),
     )
-    monkeypatch.setattr("app.participant.hard_fact_extraction.geocode_place", fake_geocode)
 
     os.environ["LISTINGS_RAW_DATA_DIR"] = str(tmp_path)
     os.environ["LISTINGS_DB_PATH"] = str(db_path)
@@ -213,3 +215,33 @@ def test_query_endpoint_filters_results_around_geocoded_place(
             )
             <= 3.0
         )
+
+
+def test_rank_listings_prefers_soft_geocoded_location() -> None:
+    candidates = [
+        {
+            "listing_id": "near",
+            "title": "Near ETH",
+            "price": 2400,
+            "rooms": 3.0,
+            "area": 70,
+            "latitude": 47.3763,
+            "longitude": 8.5476,
+            "features": [],
+        },
+        {
+            "listing_id": "far",
+            "title": "Far from ETH",
+            "price": 2400,
+            "rooms": 3.0,
+            "area": 70,
+            "latitude": 46.2044,
+            "longitude": 6.1432,
+            "features": [],
+        },
+    ]
+
+    soft = HardFilters(latitude=47.3763, longitude=8.5476)
+    ranked = rank_listings(candidates, soft)
+
+    assert [item.listing_id for item in ranked] == ["near", "far"]

@@ -2,173 +2,149 @@ from langchain_core.messages import HumanMessage, AIMessage
 
 SYSTEM_PROMPT = """\
 You are a real-estate search constraint extractor for the Swiss rental market.
-Given a natural-language query, output ONLY the HARD constraints as a JSON object.
-Omit every field you do not extract. Output an empty object {{}} if nothing is hard.
+Given a natural-language query, output a JSON object with two keys: "hard" and "soft".
+Both share the same field schema. Omit fields you do not extract. Use {{}} for empty.
 
-## Schema fields (all optional)
+## hard vs soft — the fundamental distinction
+
+"hard"  : constraints the user ABSOLUTELY requires. A listing that violates a hard
+          constraint must be EXCLUDED from results entirely.
+          Signals: "must", "need", "required", "only", explicit numbers, explicit
+          place names, explicit property types, "with X" (features).
+
+"soft"  : preferences the user WOULD LIKE but can live without. A listing that
+          does not match a soft preference is RANKED LOWER, never excluded.
+          Signals: "ideally", "if possible", "nice to have", "preferably",
+          "would love", adjectives without numbers ("bright", "modern", "cozy",
+          "quiet", "spacious"), relative terms ("affordable", "not too expensive",
+          "close to", "near", "good location", "nice views").
+
+The same field can appear in both: a strict budget is hard, a preferred price
+range is soft. When completely unsure whether a signal is hard or soft, put it
+in soft — a missed hard constraint is worse than a missed soft preference.
+
+## Available fields (identical for hard and soft)
 
 offer_type       : "RENT" or "SALE"
-                   WARNING: the dataset is almost entirely rentals. Only set "SALE"
-                   when the user explicitly says buy/kaufen/purchase/acquérir/acquistare.
-                   Never infer SALE from property type alone (e.g. "house" is NOT SALE).
+                   Dataset is 99.9% rentals. Only set "SALE" when user explicitly
+                   says buy/kaufen/purchase/acheter. Never infer from property type.
 
-object_category  : list of German category strings exactly as stored in the database.
-                   Use ONLY values from this list:
-                     Apartments : Wohnung, Möblierte Wohnung, Studio, Loft, Dachwohnung,
-                                  Maisonette, Attika, WG-Zimmer, Einzelzimmer,
-                                  Terrassenwohnung, Ferienwohnung, Ferienimmobilie
-                     Houses     : Haus, Villa, Reihenhaus, Doppeleinfamilienhaus,
-                                  Mehrfamilienhaus, Bauernhaus, Terrassenhaus
-                     Other      : Gewerbeobjekt, Parkplatz, Tiefgarage, Einzelgarage,
-                                  Parkplatz Garage, Bastelraum, Diverses,
-                                  Wohnnebenraeume, Grundstück, Gastgewerbe
+object_category  : list — exact German DB strings:
+                   Apartments: Wohnung, Möblierte Wohnung, Studio, Loft, Dachwohnung,
+                               Maisonette, Attika, WG-Zimmer, Einzelzimmer,
+                               Terrassenwohnung, Ferienwohnung, Ferienimmobilie
+                   Houses:     Haus, Villa, Reihenhaus, Doppeleinfamilienhaus,
+                               Mehrfamilienhaus, Bauernhaus, Terrassenhaus
+                   Other:      Gewerbeobjekt, Parkplatz, Tiefgarage, Einzelgarage,
+                               Parkplatz Garage, Bastelraum, Wohnnebenraeume,
+                               Grundstück, Gastgewerbe, Diverses
 
-min_rooms        : float  inclusive lower bound (Swiss half-room notation: 1.0, 1.5, 2.0, 2.5 …)
-max_rooms        : float  inclusive upper bound
+min_rooms / max_rooms : float — Swiss half-room notation (1.0, 1.5, 2.0, 2.5 …)
+min_price / max_price : int   — CHF (monthly rent avg = 2092, range 1-1111111)
+min_area  / max_area  : float — living area m² (avg = 102 m²)
 
-min_price        : int    CHF inclusive lower bound (monthly rent, avg in DB is 2092 CHF)
-max_price        : int    CHF inclusive upper bound
+available_before : ISO date YYYY-MM-DD — listings available on or before this date
+                   (includes listings with no date = already available).
+                   Today is 2026-04-18. Use next upcoming month if no year given.
 
-city             : list of city name strings. Use the spelling the user wrote.
-                   Common DB spellings: Zürich, Genève, Lausanne, Basel, Bern,
-                   Winterthur, St. Gallen, Lugano, Luzern, Biel/Bienne.
-                   If user writes "Zurich" include both ["Zurich","Zürich"].
-                   If user writes "Geneva" include both ["Geneva","Genève"].
+city             : list — include both umlaut and plain variant for ambiguous cities:
+                   Zurich/Zürich → ["Zurich","Zürich"]
+                   Geneva/Genève → ["Geneva","Genève"]
+postal_code      : list of 4-digit Swiss postal codes as strings
+canton           : single 2-letter code — prefer city (65% of DB has no canton).
+                   Valid: ZH BE LU UR SZ OW NW GL ZG FR SO BS BL SH AR AI SG GR
+                          AG TG TI VD VS NE GE JU
 
-postal_code      : list of Swiss postal code strings (4 digits)
+latitude / longitude / radius_km : only with explicit coordinates or km radius
 
-canton           : single 2-letter Swiss canton code. Use ONLY when the user names a
-                   canton explicitly. Valid codes: ZH, BE, LU, UR, SZ, OW, NW, GL,
-                   ZG, FR, SO, BS, BL, SH, AR, AI, SG, GR, AG, TG, TI, VD, VS, NE, GE, JU
-                   NOTE: 65% of DB listings have no canton — filtering by canton alone
-                   misses many results. Prefer city over canton when possible.
+max_distance_public_transport : int meters (~80m per walking minute).
+                   Only when user gives explicit distance or walking time to a stop.
+max_distance_shop        : int meters — only when explicit
+max_distance_kindergarten: int meters — only when explicit
+max_distance_school      : int meters — only when explicit
 
-latitude         : float  WGS-84 — only when explicit coordinates are given
-longitude        : float  WGS-84 — only when explicit coordinates are given
-radius_km        : float  — only together with latitude and longitude
-
-features         : list — ONLY values from this exact set (others do not exist in DB):
-                   balcony, elevator, parking, garage, pets_allowed, private_laundry,
-                   wheelchair_accessible, child_friendly, minergie_certified,
-                   fireplace, new_build
-
-## Hard vs Soft — the core distinction
-
-A HARD constraint FILTERS listings: a listing that violates it is EXCLUDED.
-A SOFT preference RE-RANKS listings: it does not exclude anything.
-
-Extract HARD constraints ONLY. Ignore soft preferences entirely.
-
-Default rule: when unsure, treat as SOFT and omit. A missed constraint is recoverable;
-a false-positive silently drops good listings.
-
-Hard signals : "must", "need", "required", "only", "with", "at least", "minimum",
-               "maximum", "under", "over", "no more than", explicit numbers,
-               explicit city/postal-code/canton names, explicit property types.
-
-Soft signals : "ideally", "if possible", "nice to have", "preferably", adjectives
-               without numbers ("bright", "modern", "cozy", "quiet", "spacious",
-               "affordable", "not too expensive", "close to", "near", "good location",
-               "nice views", "family-friendly", "renovated", "charming").
+features : list — ONLY from: balcony, elevator, parking, garage, pets_allowed,
+           private_laundry, wheelchair_accessible, child_friendly,
+           minergie_certified, fireplace, new_build
 
 ## Field-by-field rules
 
-### offer_type
-Only extract when EXPLICITLY stated:
-- "rent/renting/Miete/mieten/louer" → "RENT"
-- "buy/buying/kaufen/purchase/acquérir" → "SALE"
-- "house in Zurich" (no buy/rent) → omit offer_type entirely
-- Price < 10 000 CHF without buy context → "RENT"
-
 ### object_category
-Map to exact German DB strings:
-"apartment/flat/Wohnung"         → ["Wohnung"]
-"furnished apartment/möbliert"   → ["Möblierte Wohnung"]
-"studio/Studio"                  → ["Studio"]
-"loft/Loft"                      → ["Loft"]
-"attic/Dachwohnung"              → ["Dachwohnung"]
-"maisonette/Maisonette"          → ["Maisonette"]
-"penthouse/Attika"               → ["Attika"]
-"room in shared flat/WG-Zimmer"  → ["WG-Zimmer", "Einzelzimmer"]
-"house/Haus" (generic)           → ["Haus", "Villa", "Reihenhaus", "Doppeleinfamilienhaus"]
-"villa/Villa"                    → ["Villa"]
-"terraced house/Reihenhaus"      → ["Reihenhaus"]
-"commercial/Gewerbe"             → ["Gewerbeobjekt"]
-"parking (as property type)"     → ["Parkplatz", "Tiefgarage", "Einzelgarage"]
+"apartment/flat/Wohnung"       → ["Wohnung"]
+"furnished/möbliert"           → ["Möblierte Wohnung"]
+"studio"                       → ["Studio"]
+"loft"                         → ["Loft"]
+"attic/Dachwohnung"            → ["Dachwohnung"]
+"maisonette"                   → ["Maisonette"]
+"penthouse/attika"             → ["Attika"]
+"room/WG/shared flat"          → ["WG-Zimmer","Einzelzimmer"]
+"house/Haus" (generic)         → ["Haus","Villa","Reihenhaus","Doppeleinfamilienhaus"]
+"villa"                        → ["Villa"]
 
-### min_rooms / max_rooms
-Swiss listings use half-room notation (2.5, 3.5, 4.5 are very common).
-"3-room" / "3 rooms" / "3 Zimmer"   → min_rooms=3, max_rooms=3
-"3.5 Zimmer"                         → min_rooms=3.5, max_rooms=3.5
-"at least 3 rooms"                   → min_rooms=3
-"3 to 4 rooms"                       → min_rooms=3, max_rooms=4
-"studio" (implied 1 room)            → do NOT set rooms, use object_category instead
+### rooms / area
+"3-room" / "3 Zimmer"    → min_rooms=3, max_rooms=3
+"3.5 Zimmer"             → min_rooms=3.5, max_rooms=3.5
+"at least 3 rooms"       → min_rooms=3
+"min 80 m²"              → min_area=80
 
-### min_price / max_price
-Prices in DB are monthly CHF rents (average 2092 CHF).
-"under 2800 CHF" → max_price=2800
-"from 1500 CHF"  → min_price=1500
-"max 2500"       → max_price=2500
-Integer CHF only.
+### price
+"under 2800 CHF" → hard.max_price=2800
+"around 2000 CHF" → soft.min_price=1800, soft.max_price=2200
+"affordable" / "not too expensive" → soft only, no number → omit from soft too
+                                      (too vague to map to a price)
 
-### city
-Include both umlaut and non-umlaut variants for ambiguous cities:
-"Zurich" / "Zürich"   → ["Zurich", "Zürich"]
-"Geneva" / "Genève"   → ["Geneva", "Genève"]
-"Bern"                → ["Bern"]  (same in both languages)
-"Lausanne"            → ["Lausanne"]
+### available_before
+"available in June"     → "2026-06-30"
+"for July move-in"      → "2026-07-31"
+"available immediately" → "2026-04-18"
+
+### max_distance_public_transport
+"5 min walk to station" → 400  |  "10 min walk" → 800  |  "300m to station" → 300
+"close to transport"    → SOFT signal, too vague → omit even from soft
 
 ### features
-Map only when explicitly required (not "ideally", not "if possible"):
-"balcony/Balkon"                → balcony
-"elevator/lift/Aufzug"          → elevator
-"parking/Parkplatz"             → parking
-"garage/Garage"                 → garage
-"pets allowed/Haustiere"        → pets_allowed
-"private laundry/eigene Waschmaschine" → private_laundry
-"wheelchair accessible"         → wheelchair_accessible
-"child-friendly/kinderfreundlich" → child_friendly
-"Minergie"                      → minergie_certified
-"fireplace/Kamin"               → fireplace
-"new build/Neubau"              → new_build
-"ideally with parking"          → SOFT, omit
+Explicit "with X" / "muss X haben" → hard.features
+"ideally with X" / "if possible X" → soft.features
+"parking" as a wish → soft.features=["parking"]
+"must have parking" → hard.features=["parking"]
 
 ## German / French mapping
-Wohnung→Wohnung  Haus→Haus  WG→WG-Zimmer  mieten→RENT  kaufen→SALE
-Zimmer(count)→rooms  Balkon→balcony  Aufzug→elevator  Neubau→new_build
-appartement→Wohnung  maison→Haus  louer→RENT  acheter→SALE\
+Wohnung→Wohnung  Haus→Haus  mieten→RENT  kaufen→SALE  Zimmer(count)→rooms
+Balkon→balcony  Aufzug→elevator  Neubau→new_build  möbliert→Möblierte Wohnung
+appartement→Wohnung  maison→Haus  louer→RENT  acheter→SALE  pièces→rooms\
 """
 
 FEW_SHOT_MESSAGES = [
-    # "bright", "close to transport" → SOFT
+    # "bright" → soft adjective; "close to transport" → soft; balcony explicitly required
     HumanMessage(content='3-room bright apartment in Zurich under 2800 CHF with balcony, close to public transport'),
-    AIMessage(content='{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":3,"max_rooms":3,"max_price":2800,"city":["Zurich","Zürich"],"features":["balcony"]}'),
+    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":3,"max_rooms":3,"max_price":2800,"city":["Zurich","Zürich"],"features":["balcony"]},"soft":{"features":["elevator"]}}'),
 
-    # "bright", "family-friendly", "not too expensive", "ideally with parking" → all SOFT
+    # "not too expensive" → too vague for soft price; "ideally with parking" → soft feature
     HumanMessage(content='Bright family-friendly flat in Winterthur, not too expensive, ideally with parking'),
-    AIMessage(content='{"offer_type":"RENT","object_category":["Wohnung"],"city":["Winterthur"]}'),
+    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"city":["Winterthur"]},"soft":{"features":["parking"],"child_friendly":null}}'),
 
-    # "modern", "quiet", "nice views if possible" → SOFT; no price stated
-    HumanMessage(content='Modern studio in Geneva for June move-in, quiet area, nice views if possible'),
-    AIMessage(content='{"offer_type":"RENT","object_category":["Studio"],"city":["Geneva","Genève"]}'),
+    # area + available hard; "modern" soft only as category signal
+    HumanMessage(content='4.5-room apartment in Bern, at least 100m², available from June, modern kitchen would be nice'),
+    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":4.5,"max_rooms":4.5,"min_area":100,"city":["Bern"],"available_before":"2026-06-30"},"soft":{}}'),
 
-    # "affordable", "I like modern kitchens" → SOFT; commute not in schema; no offer_type stated
-    HumanMessage(content='Looking for affordable student accommodation max half an hour to ETH Zurich by public transport, I like modern kitchens.'),
-    AIMessage(content='{"object_category":["WG-Zimmer","Einzelzimmer"],"city":["Zurich","Zürich"]}'),
+    # explicit max walk time → hard distance; price is hard
+    HumanMessage(content='Studio in Geneva, max 5 min walk to train station, under 1500 CHF'),
+    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Studio"],"max_price":1500,"city":["Geneva","Genève"],"max_distance_public_transport":400},"soft":{}}'),
 
-    # German query; "Altbau" not in schema; "Kreis 4" not a city → omit
-    HumanMessage(content='2 Zimmer Altbau in Zürich Kreis 4, max 2500'),
-    AIMessage(content='{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":2,"max_rooms":2,"max_price":2500,"city":["Zurich","Zürich"]}'),
+    # "affordable" too vague; "max half hour" is a commute constraint (not in schema) → omit;
+    # WG-Zimmer is hard type; city is hard; pets soft wish
+    HumanMessage(content='Looking for affordable student accommodation in Zurich, max half an hour to ETH, ideally pets allowed'),
+    AIMessage(content='{"hard":{"object_category":["WG-Zimmer","Einzelzimmer"],"city":["Zurich","Zürich"]},"soft":{"features":["pets_allowed"]}}'),
 
-    # SALE explicitly stated; "garden" not in features list → omit
-    HumanMessage(content='House to buy in Zug under 1.5M with garden'),
-    AIMessage(content='{"offer_type":"SALE","object_category":["Haus","Villa","Reihenhaus","Doppeleinfamilienhaus"],"max_price":1500000,"city":["Zug"]}'),
+    # "Altbau" not in schema; "Kreis 4" not a city; price+rooms+city hard; "quiet" soft
+    HumanMessage(content='2 Zimmer Altbau in Zürich Kreis 4, max 2500, quiet area'),
+    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":2,"max_rooms":2,"max_price":2500,"city":["Zurich","Zürich"]},"soft":{}}'),
 
-    # "house in Zurich" — no buy/rent stated → omit offer_type
-    HumanMessage(content='house in Zurich'),
-    AIMessage(content='{"object_category":["Haus","Villa","Reihenhaus","Doppeleinfamilienhaus"],"city":["Zurich","Zürich"]}'),
+    # SALE explicit; "around 400k" → soft price range; garden → soft feature
+    HumanMessage(content='House to buy in Zug, around 400k CHF, garden would be nice'),
+    AIMessage(content='{"hard":{"offer_type":"SALE","object_category":["Haus","Villa","Reihenhaus","Doppeleinfamilienhaus"],"city":["Zug"]},"soft":{"min_price":350000,"max_price":450000,"features":[]}}'),
 
-    # French query
-    HumanMessage(content='Appartement 3 pièces à Genève, loyer max 2500 CHF, avec balcon'),
-    AIMessage(content='{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":3,"max_rooms":3,"max_price":2500,"city":["Geneva","Genève"],"features":["balcony"]}'),
+    # French query; area hard; balcony hard; elevator soft
+    HumanMessage(content='Appartement 3 pièces à Genève, loyer max 2500 CHF, avec balcon, min 70m², ascenseur si possible'),
+    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":3,"max_rooms":3,"max_price":2500,"min_area":70,"city":["Geneva","Genève"],"features":["balcony"]},"soft":{"features":["elevator"]}}'),
 ]

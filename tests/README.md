@@ -45,12 +45,10 @@ If `pytest` is not directly available in the shell, prefer `uv run pytest ...`, 
 
 ## Behavior Without OpenAI Configuration
 
-`app/participant/hard_fact_extraction.py` is now a thin orchestrator.
-
 The LLM-backed pieces are split into separate modules:
 
-- `app/participant/constraint_extractor/` for normal hard filters
-- `app/participant/geolocation_extractor.py` for place-resolution intent
+- `app/participant/constraint_extractor/` for unified `hard` + `soft` query extraction
+- `app/participant/geolocation_extractor.py` for place-resolution intent and geocoding enrichment
 
 If any of these happen:
 
@@ -60,7 +58,7 @@ If any of these happen:
 - the OpenAI client or extractor initialization fails for another reason
 
 then `extract_constraints(...)` falls back to:
-then the LLM-backed extractor modules fall back to empty structured outputs:
+then the extractor modules fall back to empty structured outputs:
 
 ```python
 HardFilters()
