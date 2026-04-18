@@ -42,6 +42,8 @@ def _normalize_city(city: str | None) -> str | None:
         "zurich": "Zürich",
         "geneve": "Genève",
         "lausanne": "Lausanne",
+        "nyon": "Nyon",
+        "sion": "Sion",
     }
 
     city = mapping.get(city_lower, city)
