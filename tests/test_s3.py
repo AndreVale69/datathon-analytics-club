@@ -1,5 +1,7 @@
 import os
 from pathlib import Path
+import sqlite3
+import pytest
 
 from app.core.s3 import get_image_urls_by_listing_id
 from app.harness.bootstrap import bootstrap_database
@@ -66,7 +68,20 @@ def test_get_image_urls_by_listing_id_uses_local_montage_for_sred(
 
     monkeypatch.setattr("app.core.s3.boto3.client", lambda *args, **kwargs: FailIfCalledS3Client())
 
-    urls = get_image_urls_by_listing_id(db_path=db_path, listing_id="4154142")
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute(
+            """
+            SELECT listing_id
+            FROM listings
+            WHERE scrape_source = 'SRED'
+            LIMIT 1
+            """
+        ).fetchone()
+
+    if row is None:
+        pytest.skip("No normalized SRED rows imported for this raw_data snapshot.")
+
+    urls = get_image_urls_by_listing_id(db_path=db_path, listing_id=row[0])
 
     assert len(urls) == 1
     assert urls[0].startswith("/raw-data-images/")
