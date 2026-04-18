@@ -4,6 +4,11 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from project_env import load_project_env
+
+
+load_project_env()
+
 
 def _project_root() -> Path:
     return Path(__file__).resolve().parents[1]

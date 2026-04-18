@@ -7,6 +7,7 @@ import mcp.types as types
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from project_env import load_project_env
 from starlette.responses import Response
 from starlette.staticfiles import StaticFiles
 
@@ -28,6 +29,9 @@ MAP_RESOURCE_ORIGINS = [
     "https://assets.comparis.ch",
     "https://assets-comparis.b-cdn.net",
 ]
+
+
+load_project_env()
 
 
 class SearchListingsInput(BaseModel):
