@@ -33,8 +33,9 @@ Rules:
     "near a school", "close to public transport", "near a shop", "near kindergarten"
     → these are NOT specific places, omit them entirely.
 
-  EXCLUDE — plain city names already captured as city filters:
-    "in Zurich", "in Geneva" → omit.
+  EXCLUDE — any city or municipality name (handled as city filters elsewhere):
+    "in Zurich", "near Zurich", "close to Bern", "proche de Genève",
+    "Nähe Basel", "around Lausanne" → ALL omit — city names are not geocoded here.
 
   hard  : user clearly requires proximity ("must", "need", "max X km from").
   soft  : user expresses a preference ("ideally", "if possible", "would like to be near").

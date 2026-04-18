@@ -93,14 +93,15 @@ features : list — ONLY from: balcony, elevator, parking, garage, pets_allowed,
 "for July move-in"      → "2026-07-31"
 "available immediately" → "2026-04-18"
 
-### proximity to named places — DO NOT extract here
-Queries like "near ETH Zurich", "close to Paradeplatz", "next to Zurich HB",
-"within 2km of the university", "près de la gare de Lausanne" refer to specific
-named landmarks, addresses, districts, or campuses. DO NOT map these to any field.
-They are resolved by a separate geocoding pipeline.
-Only extract max_distance_* fields when the user gives an explicit walking time or
-distance to a generic amenity type (station, shop, school, kindergarten) — not a
-named place.
+### city vs. named-place proximity
+If the place reference IS a city or municipality name, always extract it as city —
+regardless of phrasing ("near Zurich", "close to Bern", "around Geneva", "Nähe Zürich",
+"proche de Lausanne" all → city=["Zurich","Zürich"] / ["Bern"] / ["Geneva","Genève"] etc.).
+
+If the place reference is a SUB-CITY location (landmark, campus, station name, street,
+district, airport) — e.g. "near ETH Zurich", "close to Paradeplatz", "next to Zurich HB",
+"within 2km of the university", "près de la gare de Lausanne" — DO NOT map it to any field.
+These are resolved by a separate geocoding pipeline.
 
 ### features
 Explicit "with X" / "muss X haben" → hard.features
@@ -139,6 +140,14 @@ FEW_SHOT_MESSAGES = [
     # "Altbau" not in schema; "Kreis 4" not a city; price+rooms+city hard; "quiet" soft
     HumanMessage(content='2 Zimmer Altbau in Zürich Kreis 4, max 2500, quiet area'),
     AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":2,"max_rooms":2,"max_price":2500,"city":["Zurich","Zürich"]},"soft":{}}'),
+
+    # "near Zurich" → city filter; "near ETH" → geocoding pipeline (omit here)
+    HumanMessage(content='flat near Zurich, ideally close to ETH, max 2000 CHF'),
+    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"max_price":2000,"city":["Zurich","Zürich"]},"soft":{}}'),
+
+    # "proche de Genève" → city; sub-city landmark omitted
+    HumanMessage(content='appartement proche de Genève, 3 pièces, loyer max 3000'),
+    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":3,"max_rooms":3,"max_price":3000,"city":["Geneva","Genève"]},"soft":{}}'),
 
     # SALE explicit; "around 400k" → soft price range; garden → soft feature
     HumanMessage(content='House to buy in Zug, around 400k CHF, garden would be nice'),
