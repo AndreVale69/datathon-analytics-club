@@ -306,7 +306,7 @@ def prepare_listing_row(row: dict[str, str]) -> tuple[Any, ...]:
     title = _clean_text(row.get("title")) or "Untitled listing"
 
     if title and "test" in title.lower():
-        title = None
+        title = "Untitled listing"
     description = _clean_text(row.get("object_description")) or _clean_text(row.get("remarks"))
     if description and "test" in description.lower():
         description=None

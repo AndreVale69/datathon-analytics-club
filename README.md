@@ -33,7 +33,7 @@ datathon-analytics-club/
     ...
 ```
 
-See [raw_data/README.md](/home/andre/university/datathon-analytics-club/raw_data/README.md) for the expected data setup.
+See [raw_data/README.md](raw_data/README.md) for the expected data setup.
 
 ## Local Secrets And Env Files
 
@@ -179,7 +179,7 @@ Download the dataset from the shared source and extract or copy its contents int
 
 Do not commit the dataset itself to Git. Keep only the code and documentation in the repository.
 
-Detailed instructions are in [raw_data/README.md](/home/andre/university/datathon-analytics-club/raw_data/README.md).
+Detailed instructions are in [raw_data/README.md](raw_data/README.md).
 
 ### 3. Run with Docker Compose first
 
