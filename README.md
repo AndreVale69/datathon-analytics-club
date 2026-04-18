@@ -23,7 +23,7 @@ The main judging focus is ranking quality and hard-constraint correctness. The M
 
 ## Current Repo Status
 
-This checkout does not currently include a `raw_data/` directory, so the API will not bootstrap until the challenge dataset is extracted into the repository root.
+This checkout includes a placeholder `raw_data/` directory, but the actual challenge dataset is not committed to Git. The API will not bootstrap correctly until you download the dataset from the shared source and place it into `raw_data/`.
 
 Expected layout:
 
@@ -32,6 +32,8 @@ datathon-analytics-club/
   raw_data/
     ...
 ```
+
+See [raw_data/README.md](/home/andre/university/datathon-analytics-club/raw_data/README.md) for the expected data setup.
 
 ## Local Secrets And Env Files
 
@@ -118,17 +120,74 @@ Recommended split:
 
 ## Quick Start
 
-### 1. Install backend dependencies
+## Requirements
+
+You have two supported ways to run the project:
+
+- Docker-first: easiest if you do not want to manage a local Python environment
+- local Python: use `uv` or a standard virtual environment
+
+Minimum tools:
+
+- Python `3.12`
+- Node.js and `npm` for `apps_sdk/web`
+- Docker and Docker Compose if you want the containerized setup
+
+Note: both the local and Docker flows require `raw_data/` to exist first.
+
+### Install `uv`
+
+`uv` is a standalone developer tool. Install it at user level on your machine, not inside the project virtual environment. The reason is simple: `uv` is the tool that creates and manages the environment, so it should exist before the project env does.
+
+If `uv` is not installed, use one of these:
+
+```bash
+pip install uv
+```
+
+or:
+
+```bash
+pipx install uv
+```
+
+or on macOS with Homebrew:
+
+```bash
+brew install uv
+```
+
+Check that it is available:
+
+```bash
+uv --version
+```
+
+If you do not want to install `uv` as a user-level tool, skip it and use the plain `venv` flow documented below.
+
+### 1. Create local env files
+
+```bash
+cp .env.example .env.local
+```
+
+### 2. Add the dataset
+
+Download the dataset from the shared source and extract or copy its contents into `raw_data/` in the repo root.
+
+Do not commit the dataset itself to Git. Keep only the code and documentation in the repository.
+
+Detailed instructions are in [raw_data/README.md](/home/andre/university/datathon-analytics-club/raw_data/README.md).
+
+### 3. Local Python setup with `uv`
+
+Install backend dependencies:
 
 ```bash
 uv sync --dev
 ```
 
-### 2. Add the dataset
-
-Extract the challenge bundle so that `raw_data/` exists in the repo root.
-
-### 3. Run the API
+Run the API:
 
 ```bash
 uv run uvicorn app.main:app --reload --port 8000
@@ -144,7 +203,25 @@ curl http://localhost:8000/health
 
 The SQLite database is created automatically from the CSV data on startup.
 
-### 4. Run the widget and MCP server
+### 4. Local Python setup without `uv`
+
+If `uv` does not work on your machine, create a normal virtual environment instead:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -e .
+pip install pytest
+```
+
+Then run the API with:
+
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+### 5. Run the widget and MCP server
 
 Build the frontend once:
 
@@ -160,6 +237,12 @@ Start the MCP server from the repo root:
 uv run uvicorn apps_sdk.server.main:app --reload --port 8001
 ```
 
+If you are using the plain virtualenv fallback instead of `uv`, run:
+
+```bash
+uvicorn apps_sdk.server.main:app --reload --port 8001
+```
+
 MCP endpoint:
 
 ```text
@@ -167,6 +250,10 @@ http://localhost:8001/mcp
 ```
 
 ## Run With Docker
+
+If you prefer Docker, you do not need to create a Python virtual environment locally.
+
+Before building the containers, make sure `raw_data/` already exists in the repo root. The `Dockerfile` copies that directory into the image, so the build will fail if it is missing.
 
 ```bash
 docker compose up --build
