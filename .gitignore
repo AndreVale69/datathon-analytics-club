@@ -19,4 +19,7 @@ apps_sdk/web/dist/
 .env.local
 .env.*.local
 
+raw_data/*
+!raw_data/README.md
+
 .idea

@@ -118,8 +118,6 @@ Recommended split:
 - GitHub Actions or deployment: keep values in GitHub Secrets
 - committed documentation: keep placeholders only in `.env.example`
 
-## Quick Start
-
 ## Requirements
 
 You have two supported ways to run the project:
@@ -165,6 +163,10 @@ uv --version
 
 If you do not want to install `uv` as a user-level tool, skip it and use the plain `venv` flow documented below.
 
+## Quick Start
+
+The recommended first way to run the project is with Docker Compose.
+
 ### 1. Create local env files
 
 ```bash
@@ -179,7 +181,68 @@ Do not commit the dataset itself to Git. Keep only the code and documentation in
 
 Detailed instructions are in [raw_data/README.md](/home/andre/university/datathon-analytics-club/raw_data/README.md).
 
-### 3. Local Python setup with `uv`
+### 3. Run with Docker Compose first
+
+If you prefer Docker, you do not need to create a Python virtual environment locally.
+
+Before building the containers, make sure `raw_data/` already contains the dataset. The `Dockerfile` copies that directory into the image, so the build will fail if it is missing.
+
+```bash
+docker compose up --build
+```
+
+This starts:
+
+- API on `http://localhost:8000`
+- MCP server on `http://localhost:8001/mcp`
+
+Important:
+
+- `http://localhost:8000` is the backend API
+- `http://localhost:8001/mcp` is the MCP endpoint
+- `http://localhost:8001` is not a normal standalone frontend webpage
+
+Useful checks:
+
+```bash
+curl http://localhost:8000/health
+curl http://localhost:8001/mcp
+```
+
+The frontend widget on port `8001` is meant to be loaded by an MCP-compatible host, not used as a normal browser app page.
+
+### 4. To see the frontend in a browser
+
+If you want to see the React frontend as a normal webpage, run the Vite dev server separately:
+
+```bash
+cd apps_sdk/web
+npm install
+npm run dev
+```
+
+Then open:
+
+```text
+http://localhost:5173
+```
+
+If you want to preview the production build instead:
+
+```bash
+cd apps_sdk/web
+npm install
+npm run build
+npm run preview
+```
+
+Then open the preview URL printed by Vite, usually:
+
+```text
+http://localhost:4173
+```
+
+### 5. Local Python setup with `uv`
 
 Install backend dependencies:
 
@@ -203,7 +266,7 @@ curl http://localhost:8000/health
 
 The SQLite database is created automatically from the CSV data on startup.
 
-### 4. Local Python setup without `uv`
+### 6. Local Python setup without `uv`
 
 If `uv` does not work on your machine, create a normal virtual environment instead:
 
@@ -221,7 +284,7 @@ Then run the API with:
 uvicorn app.main:app --reload --port 8000
 ```
 
-### 5. Run the widget and MCP server
+### 7. Run the widget and MCP server with local Python
 
 Build the frontend once:
 
@@ -248,23 +311,6 @@ MCP endpoint:
 ```text
 http://localhost:8001/mcp
 ```
-
-## Run With Docker
-
-If you prefer Docker, you do not need to create a Python virtual environment locally.
-
-Before building the containers, make sure `raw_data/` already exists in the repo root. The `Dockerfile` copies that directory into the image, so the build will fail if it is missing.
-
-```bash
-docker compose up --build
-```
-
-This starts:
-
-- API on `http://localhost:8000`
-- MCP server on `http://localhost:8001/mcp`
-
-The compose setup mounts the repository into the containers, so the same `.env.local` file can be used there too.
 
 ## Useful Commands
 
