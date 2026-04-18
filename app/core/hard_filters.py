@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -18,9 +18,16 @@ class HardFilterParams:
     max_price: int | None = None
     min_rooms: float | None = None
     max_rooms: float | None = None
+    min_area: float | None = None
+    max_area: float | None = None
+    available_before: str | None = None
     latitude: float | None = None
     longitude: float | None = None
     radius_km: float | None = None
+    max_distance_public_transport: int | None = None
+    max_distance_shop: int | None = None
+    max_distance_kindergarten: int | None = None
+    max_distance_school: int | None = None
     features: list[str] | None = None
     offer_type: str | None = None
     object_category: list[str] | None = None
@@ -60,10 +67,10 @@ def search_listings(db_path: Path, filters: HardFilterParams) -> list[dict[str, 
     where_clauses: list[str] = []
     params: list[Any] = []
 
+    # ── Location ──────────────────────────────────────────────────────────────
     city = _normalize_list(filters.city)
     if city:
         placeholders = ", ".join("?" for _ in city)
-        # Normalize umlauts in both DB value and input so "Zurich" matches "Zürich"
         umlaut_sql = (
             "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(city),"
             "'ü','u'),'ö','o'),'ä','a'),'é','e'),'è','e')"
@@ -81,6 +88,7 @@ def search_listings(db_path: Path, filters: HardFilterParams) -> list[dict[str, 
         where_clauses.append("UPPER(canton) = ?")
         params.append(filters.canton.upper())
 
+    # ── Price ─────────────────────────────────────────────────────────────────
     if filters.min_price is not None:
         where_clauses.append("price >= ?")
         params.append(filters.min_price)
@@ -89,6 +97,7 @@ def search_listings(db_path: Path, filters: HardFilterParams) -> list[dict[str, 
         where_clauses.append("price <= ?")
         params.append(filters.max_price)
 
+    # ── Size ──────────────────────────────────────────────────────────────────
     if filters.min_rooms is not None:
         where_clauses.append("rooms >= ?")
         params.append(filters.min_rooms)
@@ -97,6 +106,21 @@ def search_listings(db_path: Path, filters: HardFilterParams) -> list[dict[str, 
         where_clauses.append("rooms <= ?")
         params.append(filters.max_rooms)
 
+    if filters.min_area is not None:
+        where_clauses.append("area >= ?")
+        params.append(filters.min_area)
+
+    if filters.max_area is not None:
+        where_clauses.append("area <= ?")
+        params.append(filters.max_area)
+
+    # ── Availability ──────────────────────────────────────────────────────────
+    # Keep listings that are already available (NULL) OR become available by the date
+    if filters.available_before is not None:
+        where_clauses.append("(available_from IS NULL OR available_from <= ?)")
+        params.append(filters.available_before)
+
+    # ── Offer type & category ─────────────────────────────────────────────────
     if filters.offer_type:
         where_clauses.append("UPPER(offer_type) = ?")
         params.append(filters.offer_type.upper())
@@ -107,6 +131,24 @@ def search_listings(db_path: Path, filters: HardFilterParams) -> list[dict[str, 
         where_clauses.append(f"object_category IN ({placeholders})")
         params.extend(object_category)
 
+    # ── Distance filters ──────────────────────────────────────────────────────
+    if filters.max_distance_public_transport is not None:
+        where_clauses.append("distance_public_transport IS NOT NULL AND distance_public_transport <= ?")
+        params.append(filters.max_distance_public_transport)
+
+    if filters.max_distance_shop is not None:
+        where_clauses.append("distance_shop IS NOT NULL AND distance_shop <= ?")
+        params.append(filters.max_distance_shop)
+
+    if filters.max_distance_kindergarten is not None:
+        where_clauses.append("distance_kindergarten IS NOT NULL AND distance_kindergarten <= ?")
+        params.append(filters.max_distance_kindergarten)
+
+    if filters.max_distance_school is not None:
+        where_clauses.append("distance_school_1 IS NOT NULL AND distance_school_1 <= ?")
+        params.append(filters.max_distance_school)
+
+    # ── Boolean features (AND semantics) ──────────────────────────────────────
     features = _normalize_list(filters.features)
     if features:
         for feature_name in features:
@@ -114,6 +156,7 @@ def search_listings(db_path: Path, filters: HardFilterParams) -> list[dict[str, 
             if column_name:
                 where_clauses.append(f"{column_name} = 1")
 
+    # ── Build query ───────────────────────────────────────────────────────────
     query = """
         SELECT
             listing_id,
@@ -153,28 +196,23 @@ def search_listings(db_path: Path, filters: HardFilterParams) -> list[dict[str, 
 
     parsed_rows = [_parse_row(dict(row)) for row in rows]
 
+    # ── Geo radius filter (in-memory Haversine) ───────────────────────────────
     if (
         filters.latitude is not None
         and filters.longitude is not None
         and filters.radius_km is not None
     ):
-        nearby_rows: list[tuple[float, dict[str, Any]]] = []
+        nearby: list[tuple[float, dict[str, Any]]] = []
         for row in parsed_rows:
             if row.get("latitude") is None or row.get("longitude") is None:
                 continue
-            distance = _distance_km(
-                filters.latitude,
-                filters.longitude,
-                row["latitude"],
-                row["longitude"],
-            )
-            if distance <= filters.radius_km:
-                nearby_rows.append((distance, row))
+            dist = _distance_km(filters.latitude, filters.longitude, row["latitude"], row["longitude"])
+            if dist <= filters.radius_km:
+                nearby.append((dist, row))
+        nearby.sort(key=lambda x: (x[0], x[1]["listing_id"]))
+        parsed_rows = [row for _, row in nearby]
 
-        nearby_rows.sort(key=lambda item: (item[0], item[1]["listing_id"]))
-        parsed_rows = [row for _, row in nearby_rows]
-
-    return parsed_rows[filters.offset : filters.offset + filters.limit]
+    return parsed_rows[filters.offset: filters.offset + filters.limit]
 
 
 def _parse_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -198,7 +236,6 @@ def _extract_image_urls(images_json: Any) -> list[str]:
         return []
     if not isinstance(parsed, dict):
         return []
-
     image_urls: list[str] = []
     for item in parsed.get("images", []) or []:
         if isinstance(item, dict) and item.get("url"):
@@ -211,33 +248,20 @@ def _extract_image_urls(images_json: Any) -> list[str]:
     return image_urls
 
 
-def _distance_km(
-    center_lat: float,
-    center_lon: float,
-    row_lat: float,
-    row_lon: float,
-) -> float:
-    earth_radius_km = 6371.0
-    delta_lat = math.radians(row_lat - center_lat)
-    delta_lon = math.radians(row_lon - center_lon)
-    start_lat = math.radians(center_lat)
-    end_lat = math.radians(row_lat)
-
-    a = (
-        math.sin(delta_lat / 2) ** 2
-        + math.cos(start_lat) * math.cos(end_lat) * math.sin(delta_lon / 2) ** 2
-    )
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return earth_radius_km * c
+def _distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
 def _sort_clause(sort_by: str | None) -> str:
-    if sort_by == "price_asc":
-        return "price ASC NULLS LAST, listing_id ASC"
-    if sort_by == "price_desc":
-        return "price DESC NULLS LAST, listing_id ASC"
-    if sort_by == "rooms_asc":
-        return "rooms ASC NULLS LAST, listing_id ASC"
-    if sort_by == "rooms_desc":
-        return "rooms DESC NULLS LAST, listing_id ASC"
-    return "listing_id ASC"
+    return {
+        "price_asc":  "price ASC NULLS LAST, listing_id ASC",
+        "price_desc": "price DESC NULLS LAST, listing_id ASC",
+        "rooms_asc":  "rooms ASC NULLS LAST, listing_id ASC",
+        "rooms_desc": "rooms DESC NULLS LAST, listing_id ASC",
+        "area_asc":   "area ASC NULLS LAST, listing_id ASC",
+        "area_desc":  "area DESC NULLS LAST, listing_id ASC",
+    }.get(sort_by or "", "listing_id ASC")
