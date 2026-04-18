@@ -55,13 +55,8 @@ canton           : single 2-letter code — prefer city (65% of DB has no canton
                    Valid: ZH BE LU UR SZ OW NW GL ZG FR SO BS BL SH AR AI SG GR
                           AG TG TI VD VS NE GE JU
 
-latitude / longitude / radius_km : only with explicit coordinates or km radius
-
-max_distance_public_transport : int meters (~80m per walking minute).
-                   Only when user gives explicit distance or walking time to a stop.
-max_distance_shop        : int meters — only when explicit
-max_distance_kindergarten: int meters — only when explicit
-max_distance_school      : int meters — only when explicit
+latitude / longitude / radius_km : resolved by a separate geocoding pipeline —
+                   DO NOT set these fields. Leave them empty.
 
 features : list — ONLY from: balcony, elevator, parking, garage, pets_allowed,
            private_laundry, wheelchair_accessible, child_friendly,
@@ -98,9 +93,14 @@ features : list — ONLY from: balcony, elevator, parking, garage, pets_allowed,
 "for July move-in"      → "2026-07-31"
 "available immediately" → "2026-04-18"
 
-### max_distance_public_transport
-"5 min walk to station" → 400  |  "10 min walk" → 800  |  "300m to station" → 300
-"close to transport"    → SOFT signal, too vague → omit even from soft
+### proximity to named places — DO NOT extract here
+Queries like "near ETH Zurich", "close to Paradeplatz", "next to Zurich HB",
+"within 2km of the university", "près de la gare de Lausanne" refer to specific
+named landmarks, addresses, districts, or campuses. DO NOT map these to any field.
+They are resolved by a separate geocoding pipeline.
+Only extract max_distance_* fields when the user gives an explicit walking time or
+distance to a generic amenity type (station, shop, school, kindergarten) — not a
+named place.
 
 ### features
 Explicit "with X" / "muss X haben" → hard.features
@@ -127,13 +127,13 @@ FEW_SHOT_MESSAGES = [
     HumanMessage(content='4.5-room apartment in Bern, at least 100m², available from June, modern kitchen would be nice'),
     AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":4.5,"max_rooms":4.5,"min_area":100,"city":["Bern"],"available_before":"2026-06-30"},"soft":{}}'),
 
-    # explicit max walk time → hard distance; price is hard
-    HumanMessage(content='Studio in Geneva, max 5 min walk to train station, under 1500 CHF'),
-    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Studio"],"max_price":1500,"city":["Geneva","Genève"],"max_distance_public_transport":400},"soft":{}}'),
+    # named station → geocoding pipeline handles it; price is hard
+    HumanMessage(content='Studio in Geneva, near the train station, under 1500 CHF'),
+    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Studio"],"max_price":1500,"city":["Geneva","Genève"]},"soft":{}}'),
 
-    # "affordable" too vague; "max half hour" is a commute constraint (not in schema) → omit;
+    # "affordable" too vague; "near ETH" is a named-place proximity → omit (geocoding pipeline);
     # WG-Zimmer is hard type; city is hard; pets soft wish
-    HumanMessage(content='Looking for affordable student accommodation in Zurich, max half an hour to ETH, ideally pets allowed'),
+    HumanMessage(content='Looking for affordable student accommodation in Zurich, near ETH, ideally pets allowed'),
     AIMessage(content='{"hard":{"object_category":["WG-Zimmer","Einzelzimmer"],"city":["Zurich","Zürich"]},"soft":{"features":["pets_allowed"]}}'),
 
     # "Altbau" not in schema; "Kreis 4" not a city; price+rooms+city hard; "quiet" soft

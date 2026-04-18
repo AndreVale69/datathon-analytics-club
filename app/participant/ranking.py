@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from app.core.hard_filters import _distance_km
 from app.models.schemas import HardFilters, ListingData, RankedListingResult
 
 
@@ -91,6 +92,21 @@ def _score(listing: dict[str, Any], soft: HardFilters) -> float:
     if dist_pt is not None:
         score += max(0.0, (500 - dist_pt) / 500) * 0.4
 
+    # ── Soft geolocation preference ───────────────────────────────────────────
+    listing_lat = listing.get("latitude")
+    listing_lon = listing.get("longitude")
+    if (
+        listing_lat is not None
+        and listing_lon is not None
+        and soft.latitude is not None
+        and soft.longitude is not None
+    ):
+        dist_km = _distance_km(soft.latitude, soft.longitude, listing_lat, listing_lon)
+        if soft.radius_km:
+            score += max(0.0, 1.0 - dist_km / soft.radius_km) * 1.2
+        else:
+            score += max(0.0, 1.0 - dist_km / 15.0) * 0.8
+
     return round(score, 4)
 
 
@@ -117,6 +133,19 @@ def _reason(listing: dict[str, Any], soft: HardFilters) -> str:
         if any(city.lower() == c.lower() for c in soft.city):
             parts.append(f"in {city}")
 
+    if (
+        listing.get("latitude") is not None
+        and listing.get("longitude") is not None
+        and soft.latitude is not None
+        and soft.longitude is not None
+    ):
+        dist_km = _distance_km(
+            soft.latitude,
+            soft.longitude,
+            listing["latitude"],
+            listing["longitude"],
+        )
+        parts.append(f"{dist_km:.1f} km from preferred location")
     return "; ".join(parts) if parts else "good candidate"
 
 
