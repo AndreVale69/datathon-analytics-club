@@ -80,8 +80,8 @@ def _normalize_city(city: str | None) -> str | None:
 
     city = mapping.get(city_lower, city_clean)
 
-    if city.isdigit():
-        return None
+    if city and city.isdigit():
+        city = None
 
     return city
 
