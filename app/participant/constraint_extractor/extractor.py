@@ -66,7 +66,7 @@ def extract_constraints(query: str) -> QueryConstraints:
         soft_raw = {k: v for k, v in raw.get("soft", {}).items() if k not in _PAGINATION_FIELDS}
         constraints = QueryConstraints(
             hard=HardFilters(**hard_raw),
-            soft=HardFilters(**soft_raw),
+            soft=QueryConstraints.SoftFilters(**soft_raw),
         )
         return enrich_constraints_with_geolocation(query, constraints)
     except Exception as exc:

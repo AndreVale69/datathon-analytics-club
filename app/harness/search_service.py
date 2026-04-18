@@ -40,7 +40,7 @@ def query_from_filters(
     hard_facts: HardFilters | None,
 ) -> ListingsResponse:
     hard = hard_facts or HardFilters()
-    soft = HardFilters()
+    soft = QueryConstraints.SoftFilters()
     candidates = search_listings(db_path, to_hard_filter_params(hard))
     candidates = filter_soft_facts(candidates, soft)
     return ListingsResponse(

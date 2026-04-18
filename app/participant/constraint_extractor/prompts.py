@@ -61,6 +61,11 @@ latitude / longitude / radius_km : resolved by a separate geocoding pipeline —
 features : list — ONLY from: balcony, elevator, parking, garage, pets_allowed,
            private_laundry, wheelchair_accessible, child_friendly,
            minergie_certified, fireplace, new_build
+    # Soft-only preference attributes (not direct DB columns; used for ranking):
+    # brightness : "low" | "medium" | "high" — subjective adjective mapping
+    # modern     : bool — prefer recently renovated/modern properties
+    # quiet      : bool — prefer low-noise / quiet surroundings
+    # furnished  : bool — prefer furnished listings (möbliert)
 
 ## Field-by-field rules
 
@@ -109,6 +114,29 @@ Explicit "with X" / "muss X haben" → hard.features
 "parking" as a wish → soft.features=["parking"]
 "must have parking" → hard.features=["parking"]
 
+### brightness / modern / quiet / furnished
+"bright" / "hell" / "viel Licht" → soft.brightness="high"
+"dark" / "dunkel" → soft.brightness="low"
+"light-filled" / "lots of light" → soft.brightness="high"
+"modern" / "renovated" / "recently renovated" / "neu renoviert" → soft.modern=true
+"cozy" / "gemütlich" → no direct mapping (omit) or could set soft.brightness/modern as appropriate
+"quiet" / "ruhig" / "low-noise" / "leise" → soft.quiet=true
+"furnished" / "möbliert" → soft.furnished=true
+
+### additional soft preferences discovered in example queries
+"max 20 minutes" / "max 25 minutes commute" / "not a long commute" → soft.max_commute_minutes=20|25|<parsed int>
+"near the lake" / "in Seenähe" → soft.near_lake=true
+"safe" / "sicher" / "clean" → soft.safe=true
+"good schools" / "gute Schulen" → soft.good_schools=true
+"little traffic" / "not on a major road" / "not directly on a big street" → soft.low_traffic=true
+"green" / "Parks" / "Grün in der Nähe" → soft.green_space=true
+"shopping to walk" / "Einkaufen zu Fuß" / "shops within walking distance" → soft.walkable_shopping=true
+"not on the ground floor" / "nicht im Erdgeschoss" → soft.not_ground_floor=true
+"good layout" / "guter Schnitt" / "good plan" → soft.good_layout=true
+
+### guidance
+Map vague subjective adjectives to these soft flags when clearly signalled. If a user mentions multiple overlapping adjectives (e.g. "quiet and safe"), set both flags. Do NOT convert geolocation signals like exact commute routing or distances into latitude/longitude here — leave those to the geocoding/routing pipeline and instead set `max_commute_minutes` as a soft ranking hint.
+
 ## German / French mapping
 Wohnung→Wohnung  Haus→Haus  mieten→RENT  kaufen→SALE  Zimmer(count)→rooms
 Balkon→balcony  Aufzug→elevator  Neubau→new_build  möbliert→Möblierte Wohnung
@@ -156,4 +184,7 @@ FEW_SHOT_MESSAGES = [
     # French query; area hard; balcony hard; elevator soft
     HumanMessage(content='Appartement 3 pièces à Genève, loyer max 2500 CHF, avec balcon, min 70m², ascenseur si possible'),
     AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":3,"max_rooms":3,"max_price":2500,"min_area":70,"city":["Geneva","Genève"],"features":["balcony"]},"soft":{"features":["elevator"]}}'),
+    # Demonstrate mapping of subjective adjectives to soft-only preferences
+    HumanMessage(content='Bright modern furnished apartment in Zurich under 2800 CHF, quiet neighbourhood if possible'),
+    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"max_price":2800,"city":["Zurich","Zürich"]},"soft":{"brightness":"high","modern":true,"furnished":true,"quiet":true}}'),
 ]

@@ -1,4 +1,4 @@
-from app.models.schemas import HardFilters
+from app.models.schemas import HardFilters, QueryConstraints
 from app.participant.ranking import rank_listings
 from app.participant.soft_filtering import filter_soft_facts
 
@@ -6,7 +6,7 @@ from app.participant.soft_filtering import filter_soft_facts
 def test_filter_soft_facts_returns_candidate_subset() -> None:
     candidates = [{"listing_id": "1"}, {"listing_id": "2"}]
 
-    filtered = filter_soft_facts(candidates, HardFilters())
+    filtered = filter_soft_facts(candidates, QueryConstraints.SoftFilters())
 
     assert isinstance(filtered, list)
     assert {item["listing_id"] for item in filtered} <= {"1", "2"}
@@ -37,7 +37,7 @@ def test_rank_listings_returns_ranked_shape() -> None:
                 "object_type": "Apartment",
             }
         ],
-        soft=HardFilters(),
+        soft=QueryConstraints.SoftFilters(),
     )
 
     assert len(ranked) == 1

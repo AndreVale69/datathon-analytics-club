@@ -142,7 +142,7 @@ def test_geocode_place_returns_different_coordinates_for_different_places(monkey
 def test_extract_constraints_resolves_hard_place_to_coordinates(monkeypatch) -> None:
     def fake_llm_extract(query: str):
         assert query == "bright apartment near Zurich HB with balcony"
-        return QueryConstraints(hard=HardFilters(), soft=HardFilters())
+        return QueryConstraints(hard=HardFilters(), soft=QueryConstraints.SoftFilters())
 
     def fake_extract_geolocation_constraints(query: str) -> GeolocationConstraints:
         assert query == "bright apartment near Zurich HB with balcony"
@@ -290,7 +290,7 @@ def test_rank_listings_prefers_soft_geocoded_location() -> None:
         },
     ]
 
-    soft = HardFilters(latitude=47.3763, longitude=8.5476)
+    soft = QueryConstraints.SoftFilters(latitude=47.3763, longitude=8.5476)
     ranked = rank_listings(candidates, soft)
 
     assert [item.listing_id for item in ranked] == ["near", "far"]

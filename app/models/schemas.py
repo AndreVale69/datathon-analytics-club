@@ -125,7 +125,33 @@ class QueryConstraints(BaseModel):
     Both use identical fields; interpretation differs in the pipeline.
     """
     hard: HardFilters = Field(default_factory=HardFilters)
-    soft: HardFilters = Field(default_factory=HardFilters)
+
+    # Soft preferences extend the hard filters with attributes that are
+    # not (necessarily) direct DB filters but are useful ranking hints for
+    # the pipeline / LLM output.
+    class SoftFilters(HardFilters):
+        # Subjective brightness preference: low/medium/high.
+        brightness: Literal["low", "medium", "high"] | None = None
+        # Prefer modern / renovated properties.
+        modern: bool | None = None
+        # Prefer quiet / low-noise surroundings.
+        quiet: bool | None = None
+        # Prefer furnished listings.
+        furnished: bool | None = None
+        # Area quality preferences: safety and school quality (soft hints).
+        safe: bool | None = None
+        # Prefer nearby green space / parks.
+        green_space: bool | None = None
+        # Prefer walkable access to shopping / amenities.
+        walkable_shopping: bool | None = None
+        # Prefer not on ground floor (user says "not on the ground floor" / "kein Erdgeschoss").
+        not_ground_floor: bool | None = None
+        # Prefer good internal layout / practical floorplan.
+        good_layout: bool | None = None
+        # Prefer areas with low traffic (distinct from `quiet` which is noise-level).
+        low_traffic: bool | None = None
+
+    soft: SoftFilters = Field(default_factory=SoftFilters)
 
 
 # ── Rest of API schemas ──────────────────────────────────────────────────────
