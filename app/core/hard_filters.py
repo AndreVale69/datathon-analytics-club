@@ -24,10 +24,6 @@ class HardFilterParams:
     latitude: float | None = None
     longitude: float | None = None
     radius_km: float | None = None
-    max_distance_public_transport: int | None = None
-    max_distance_shop: int | None = None
-    max_distance_kindergarten: int | None = None
-    max_distance_school: int | None = None
     features: list[str] | None = None
     offer_type: str | None = None
     object_category: list[str] | None = None
@@ -130,23 +126,6 @@ def search_listings(db_path: Path, filters: HardFilterParams) -> list[dict[str, 
         placeholders = ", ".join("?" for _ in object_category)
         where_clauses.append(f"object_category IN ({placeholders})")
         params.extend(object_category)
-
-    # ── Distance filters ──────────────────────────────────────────────────────
-    if filters.max_distance_public_transport is not None:
-        where_clauses.append("distance_public_transport IS NOT NULL AND distance_public_transport <= ?")
-        params.append(filters.max_distance_public_transport)
-
-    if filters.max_distance_shop is not None:
-        where_clauses.append("distance_shop IS NOT NULL AND distance_shop <= ?")
-        params.append(filters.max_distance_shop)
-
-    if filters.max_distance_kindergarten is not None:
-        where_clauses.append("distance_kindergarten IS NOT NULL AND distance_kindergarten <= ?")
-        params.append(filters.max_distance_kindergarten)
-
-    if filters.max_distance_school is not None:
-        where_clauses.append("distance_school_1 IS NOT NULL AND distance_school_1 <= ?")
-        params.append(filters.max_distance_school)
 
     # ── Boolean features (AND semantics) ──────────────────────────────────────
     features = _normalize_list(filters.features)

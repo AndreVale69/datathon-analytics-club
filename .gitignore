@@ -28,3 +28,6 @@ query_houses_zurich.py
 test_query.sh
 test_extractor.sh
 clean_cities.py
+discovered_fields.json
+merge_csvs.py
+discover_fields.py
