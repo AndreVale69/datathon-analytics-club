@@ -31,3 +31,6 @@ clean_cities.py
 discovered_fields.json
 merge_csvs.py
 discover_fields.py
+
+# Agents
+memory
