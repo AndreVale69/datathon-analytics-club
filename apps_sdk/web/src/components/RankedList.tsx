@@ -56,15 +56,6 @@ export default function RankedList({
   const [imageIndexes, setImageIndexes] = useState<Record<string, number>>({});
   const touchStartXRef = useRef<Record<string, number>>({});
 
-  if (!results.length) {
-    return (
-      <div className="empty-state">
-        <p>No results yet.</p>
-        <p className="muted">Search for an apartment to see ranked listings.</p>
-      </div>
-    );
-  }
-
   return (
     <div className="ranked-list">
       {results.map((result, index) => {

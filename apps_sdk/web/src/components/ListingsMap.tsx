@@ -20,6 +20,7 @@ type RankedListingResult = {
 
 type ListingsMapProps = {
   results: RankedListingResult[];
+  selectedId: string | null;
   hoveredId: string | null;
   onSelect: (listingId: string) => void;
   onHover: (listingId: string | null) => void;
@@ -79,8 +80,11 @@ function applyPinStyle(el: HTMLElement, isHovered: boolean) {
   el.style.zIndex = isHovered ? "10" : "1";
 }
 
+const FOCUS_MIN_ZOOM = 13;
+
 export default function ListingsMap({
   results,
+  selectedId,
   hoveredId,
   onSelect,
   onHover,
@@ -190,6 +194,22 @@ export default function ListingsMap({
       applyPinStyle(el, id === hoveredId);
     });
   }, [hoveredId]);
+
+  // Pan + zoom to selected listing
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !selectedId) return;
+    const result = results.find((r) => r.listing_id === selectedId);
+    if (!result) return;
+    const { latitude: lat, longitude: lng } = result.listing;
+    if (lat == null || lng == null) return;
+    const currentZoom = map.getZoom();
+    map.easeTo({
+      center: [lng, lat],
+      zoom: Math.max(currentZoom, FOCUS_MIN_ZOOM),
+      duration: 600,
+    });
+  }, [selectedId, results]);
 
 
   return <div ref={mapContainerRef} className="map-container" />;

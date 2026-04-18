@@ -52,7 +52,7 @@ export default function App() {
       const listings: RankedListingResult[] = data.listings ?? [];
       console.log("[listings]", listings);
       setResults(listings);
-      setSelectedId(listings[0]?.listing_id ?? null);
+      setSelectedId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
@@ -60,9 +60,11 @@ export default function App() {
     }
   }
 
-  const selectedListing = useMemo(
-    () => results.find((r) => r.listing_id === selectedId) ?? null,
-    [results, selectedId],
+  const mappableResults = useMemo(
+    () => results.filter(
+      (r) => typeof r.listing.latitude === "number" && typeof r.listing.longitude === "number"
+    ),
+    [results],
   );
 
   return (
@@ -70,7 +72,8 @@ export default function App() {
 
       <main className={`map-panel ${isOpen ? "shrink" : "full"}`}>
         <ListingsMap
-          results={results}
+          results={mappableResults}
+          selectedId={selectedId}
           hoveredId={hoveredId}
           onSelect={setSelectedId}
           onHover={setHoveredId}
@@ -91,9 +94,11 @@ export default function App() {
             <p className="eyebrow">Listings</p>
             <h1>Ranked results</h1>
             <p className="muted">
-              {results.length
-                ? `${results.length} result${results.length === 1 ? "" : "s"}`
-                : "No results"}
+              {loading
+                ? ""
+                : mappableResults.length
+                  ? `${mappableResults.length} result${mappableResults.length === 1 ? "" : "s"}`
+                  : "No results"}
             </p>
           </div>
 
@@ -113,15 +118,15 @@ export default function App() {
                 </div>
               ))}
             </div>
-          ) : (
+          ) : mappableResults.length > 0 ? (
           <RankedList
-            results={results}
+            results={mappableResults}
             selectedId={selectedId}
             hoveredId={hoveredId}
             onSelect={setSelectedId}
             onHover={setHoveredId}
           />
-          )}
+          ) : null}
         </aside>
       )}
 
