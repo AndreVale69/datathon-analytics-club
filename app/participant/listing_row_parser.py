@@ -35,6 +35,16 @@ def _parse_float(value: str | None) -> float | None:
     except ValueError:
         return None
 
+def _normalize_city(city: str | None) -> str | None:
+    city_lower = city.lower()
+
+    mapping = {
+        "zurich": "Zürich",
+        "geneve": "Genève",
+        "lausanne": "Lausanne",
+    }
+
+    city = mapping.get(city_lower, city)
 
 def _parse_int(value: str | None) -> int | None:
     number = _parse_float(value)
@@ -250,11 +260,18 @@ def _derive_features(
 def prepare_listing_row(row: dict[str, str]) -> tuple[Any, ...]:
     location = _parse_json_object(row.get("location_address"))
     city = _clean_text(row.get("object_city")) or _clean_text(location.get("City"))
+    city = _normalize_city(city)
     postal_code = _clean_text(row.get("object_zip")) or _clean_text(location.get("PostalCode"))
     canton = _clean_text(row.get("object_state")) or _clean_text(location.get("canton"))
     canton = canton.upper() if canton else None
     title = _clean_text(row.get("title")) or "Untitled listing"
+
+    if title and "test" in title.lower():
+        title = None
     description = _clean_text(row.get("object_description")) or _clean_text(row.get("remarks"))
+    if description and "test" in description.lower():
+        title = None
+
     offer_type = _clean_text(row.get("offer_type"))
     offer_type = offer_type.upper() if offer_type else None
     orig_data = _parse_json_object(row.get("orig_data"))

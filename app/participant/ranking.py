@@ -5,6 +5,36 @@ from typing import Any
 
 from app.models.schemas import ListingData, RankedListingResult
 
+def compute_score(listing, soft_facts):
+    score = 0
+
+    price = listing.get("price")
+    rooms = listing.get("rooms")
+
+    if price is None or price < 300 or price > 10000:
+        return 0
+    if rooms is None or rooms < 1 or rooms > 10:
+        return 0
+
+    score += max(0, 3000 - price) / 3000
+
+    score += min(rooms, 5) / 5
+
+    dist = listing.get("distance_public_transport")
+    if dist is not None:
+        score += max(0, 500 - dist) / 500
+
+    if listing.get("feature_balcony") == 1:
+        score += 1
+    if listing.get("feature_parking") == 1:
+        score += 0.5
+
+    desc = (listing.get("description") or "").lower()
+    for keyword in soft_facts.get("keywords", []):
+        if keyword in desc:
+            score += 2
+
+    return score
 
 def rank_listings(
     candidates: list[dict[str, Any]],
@@ -12,15 +42,21 @@ def rank_listings(
 ) -> list[RankedListingResult]:
     # Intentionally stubbed. Teams can replace this with a scoring or
     # reranking stage that uses the soft_facts payload.
-    return [
-        RankedListingResult(
-            listing_id=str(candidate["listing_id"]),
-            score=1.0,
-            reason="Matched hard filters; soft ranking stub.",
-            listing=_to_listing_data(candidate),
+    results = []
+
+    for candidate in candidates:
+        score = compute_score(candidate, soft_facts)
+
+        results.append(
+            RankedListingResult(
+                listing_id=str(candidate["listing_id"]),
+                score=score,
+                reason=f"Score={score:.2f}",
+                listing=_to_listing_data(candidate),
+            )
         )
-        for candidate in candidates
-    ]
+
+    return sorted(results, key=lambda x: x.score, reverse=True)
 
 
 def _to_listing_data(candidate: dict[str, Any]) -> ListingData:
