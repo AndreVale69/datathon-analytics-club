@@ -45,7 +45,12 @@ If `pytest` is not directly available in the shell, prefer `uv run pytest ...`, 
 
 ## Behavior Without OpenAI Configuration
 
-`app/participant/hard_fact_extraction.py` now treats the LLM-based constraint extractor as optional.
+`app/participant/hard_fact_extraction.py` is now a thin orchestrator.
+
+The LLM-backed pieces are split into separate modules:
+
+- `app/participant/constraint_extractor/` for normal hard filters
+- `app/participant/geolocation_extractor.py` for place-resolution intent
 
 If any of these happen:
 
@@ -55,16 +60,23 @@ If any of these happen:
 - the OpenAI client or extractor initialization fails for another reason
 
 then `extract_constraints(...)` falls back to:
+then the LLM-backed extractor modules fall back to empty structured outputs:
 
 ```python
 HardFilters()
+```
+
+or, for place intent:
+
+```python
+GeolocationIntent()
 ```
 
 This means:
 
 - import-time failures should not break `tests/test_geocoding.py`
 - basic pipeline tests can still run without OpenAI credentials
-- geocoding-based place resolution can still enrich the query when phrases like `near ...` or `within X km of ...` are present
+- the application degrades cleanly instead of crashing during import or startup
 
 What you lose in that fallback mode:
 
@@ -73,7 +85,7 @@ What you lose in that fallback mode:
 What still works:
 
 - explicit structured filter requests
-- local geocoding enrichment for supported place phrases
+- local geocoding enrichment when the geolocation extractor is available and returns a place query
 - downstream search and ranking on the resulting hard filters
 
 ## Behavior Without Geocoding Access

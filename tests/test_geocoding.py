@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from app.core.geocoding import GeocodedPlace, geocode_place
 from app.core.hard_filters import HardFilterParams, _distance_km, search_listings
 from app.harness.csv_import import create_schema
+from app.participant.geolocation_extractor import GeolocationIntent
 from app.participant.hard_fact_extraction import extract_hard_facts
 
 
@@ -94,6 +95,10 @@ def test_extract_hard_facts_resolves_near_place_to_coordinates(monkeypatch) -> N
         assert query == "bright apartment near Zurich HB with balcony"
         return HardFilters()
 
+    def fake_extract_geolocation_intent(query: str) -> GeolocationIntent:
+        assert query == "bright apartment near Zurich HB with balcony"
+        return GeolocationIntent(geocoding_query="Zurich HB", radius_km=3.0)
+
     def fake_geocode(place: str) -> GeocodedPlace | None:
         assert place == "Zurich HB"
         return GeocodedPlace(label=place, latitude=47.378177, longitude=8.540192)
@@ -103,6 +108,10 @@ def test_extract_hard_facts_resolves_near_place_to_coordinates(monkeypatch) -> N
     monkeypatch.setattr(
         "app.participant.hard_fact_extraction.extract_constraints",
         fake_extract_constraints,
+    )
+    monkeypatch.setattr(
+        "app.participant.hard_fact_extraction.extract_geolocation_intent",
+        fake_extract_geolocation_intent,
     )
     monkeypatch.setattr("app.participant.hard_fact_extraction.geocode_place", fake_geocode)
 
@@ -122,6 +131,10 @@ def test_extract_hard_facts_preserves_explicit_radius(monkeypatch) -> None:
         assert query == "studio within 1.5 km of Lausanne station under 2500 CHF"
         return HardFilters()
 
+    def fake_extract_geolocation_intent(query: str) -> GeolocationIntent:
+        assert query == "studio within 1.5 km of Lausanne station under 2500 CHF"
+        return GeolocationIntent(geocoding_query="Lausanne station", radius_km=1.5)
+
     def fake_geocode(place: str) -> GeocodedPlace | None:
         seen.append(place)
         return GeocodedPlace(label=place, latitude=46.5197, longitude=6.6323)
@@ -129,6 +142,10 @@ def test_extract_hard_facts_preserves_explicit_radius(monkeypatch) -> None:
     monkeypatch.setattr(
         "app.participant.hard_fact_extraction.extract_constraints",
         fake_extract_constraints,
+    )
+    monkeypatch.setattr(
+        "app.participant.hard_fact_extraction.extract_geolocation_intent",
+        fake_extract_geolocation_intent,
     )
     monkeypatch.setattr("app.participant.hard_fact_extraction.geocode_place", fake_geocode)
 
@@ -165,6 +182,10 @@ def test_query_endpoint_filters_results_around_geocoded_place(
     monkeypatch.setattr(
         "app.participant.hard_fact_extraction.extract_constraints",
         lambda query: HardFilters(),
+    )
+    monkeypatch.setattr(
+        "app.participant.hard_fact_extraction.extract_geolocation_intent",
+        lambda query: GeolocationIntent(geocoding_query="Winterthur station", radius_km=3.0),
     )
     monkeypatch.setattr("app.participant.hard_fact_extraction.geocode_place", fake_geocode)
 
