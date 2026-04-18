@@ -22,7 +22,9 @@ type RankedListingResult = {
 type RankedListProps = {
   results: RankedListingResult[];
   selectedId: string | null;
+  hoveredId: string | null;
   onSelect: (listingId: string) => void;
+  onHover: (listingId: string | null) => void;
 };
 
 function formatPrice(price?: number | null): string {
@@ -47,7 +49,9 @@ function getImageUrls(listing: ListingData): string[] {
 export default function RankedList({
   results,
   selectedId,
+  hoveredId,
   onSelect,
+  onHover,
 }: RankedListProps) {
   const [imageIndexes, setImageIndexes] = useState<Record<string, number>>({});
   const touchStartXRef = useRef<Record<string, number>>({});
@@ -55,10 +59,8 @@ export default function RankedList({
   if (!results.length) {
     return (
       <div className="empty-state">
-        <p>No widget data yet.</p>
-        <p className="muted">
-          Run the `search_listings` tool to render the map and list.
-        </p>
+        <p>No results yet.</p>
+        <p className="muted">Search for an apartment to see ranked listings.</p>
       </div>
     );
   }
@@ -105,9 +107,11 @@ export default function RankedList({
           <div
             key={result.listing_id}
             className={`listing-card ${
-              selectedId === result.listing_id ? "selected" : ""
+              hoveredId === result.listing_id || selectedId === result.listing_id ? "selected" : ""
             }`}
             onClick={() => onSelect(result.listing_id)}
+            onMouseEnter={() => onHover(result.listing_id)}
+            onMouseLeave={() => onHover(null)}
             role="button"
             tabIndex={0}
           >

@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 
 from app.api.routes.listings import router as listings_router
@@ -21,6 +22,15 @@ app = FastAPI(
     title="Datathon 2026 Listings Harness",
     lifespan=lifespan,
 )
+
+# DEVELOPMENT ONLY -- see README security warning
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(listings_router)
 
 _sred_images_dir = get_settings().raw_data_dir / "sred_images"
