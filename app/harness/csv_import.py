@@ -63,7 +63,11 @@ def import_csvs(connection: sqlite3.Connection, csv_paths: Iterable[Path]) -> No
     for csv_path in csv_paths:
         with csv_path.open(newline="", encoding="utf-8") as handle:
             reader = csv.DictReader(handle)
-            rows = [prepare_listing_row(row) for row in reader]
+            rows = []
+            for row in reader:
+                parsed = prepare_listing_row(row)
+                if parsed is not None:
+                    rows.append(parsed)
 
             connection.executemany(
                 """

@@ -25,39 +25,68 @@ def rank_listings(
 def _score(listing: dict[str, Any], soft: HardFilters) -> float:
     score = 0.0
 
-    # ── Price proximity ───────────────────────────────────────────────────────
     price = listing.get("price")
-    if price and soft.max_price:
-        # Reward listings well under the soft price ceiling
-        score += max(0.0, 1.0 - price / soft.max_price)
-    elif price and 300 <= price <= 10000:
-        # Generic reward for reasonable price
-        score += max(0.0, (10000 - price) / 10000) * 0.3
-
-    # ── Rooms proximity ───────────────────────────────────────────────────────
     rooms = listing.get("rooms")
-    if rooms and soft.min_rooms:
-        score += max(0.0, 1.0 - abs(rooms - soft.min_rooms) / soft.min_rooms) * 0.5
-
-    # ── Area proximity ────────────────────────────────────────────────────────
     area = listing.get("area")
-    if area and soft.min_area:
-        score += max(0.0, 1.0 - abs(area - soft.min_area) / soft.min_area) * 0.3
 
-    # ── City preference ───────────────────────────────────────────────────────
+    # ── PRICE  ────────────────────────────────────────────────────
+    if price:
+        # se abbiamo budget utente → usalo
+        if soft.max_price:
+            score += max(0.0, 1.0 - price / soft.max_price)
+
+        # fallback: premia prezzi realistici
+        elif 300 <= price <= 10000:
+            score += max(0.0, (10000 - price) / 10000) * 0.3
+
+    # ── PRICE PER M2  ───────────────────────────────────────────────
+    if price and area:
+        price_per_m2 = price / area
+
+        # range realistico svizzera ~15–30
+        if price_per_m2 < 20:
+            score += 1.0
+        elif price_per_m2 < 30:
+            score += 0.5
+
+    # ── ROOMS ────────────────────────────────────────────────────────────────
+    if rooms:
+        if soft.min_rooms:
+            score += max(0.0, 1.0 - abs(rooms - soft.min_rooms) / soft.min_rooms) * 0.5
+        else:
+            score += min(rooms / 5, 1.0)
+
+    # ── AREA ─────────────────────────────────────────────────────────────────
+    if area:
+        if soft.min_area:
+            score += max(0.0, 1.0 - abs(area - soft.min_area) / soft.min_area) * 0.3
+        else:
+            score += min(area / 100, 1.0)
+
+    # ── CITY MATCH ───────────────────────────────────────────────────────────
     if soft.city:
         city = (listing.get("city") or "").lower()
         if any(city == c.lower() for c in soft.city):
-            score += 1.0
+            score += 1.5  # boost aumentato
 
-    # ── Feature preferences ───────────────────────────────────────────────────
+    # ── FEATURES ─────────────────────────────────────────────────────────────
     if soft.features:
         for feat in soft.features:
             col = f"feature_{feat}"
             if listing.get(col) == 1:
                 score += 0.5
 
-    # ── Transport proximity ───────────────────────────────────────────────────
+    # ── FEATURE BONUS GENERALI (NUOVO) ────────────────────────────────────────
+    if listing.get("feature_balcony") == 1:
+        score += 0.3
+
+    if listing.get("feature_elevator") == 1:
+        score += 0.2
+
+    if listing.get("feature_parking") == 1:
+        score += 0.2
+
+    # ── TRANSPORT ────────────────────────────────────────────────────────────
     dist_pt = listing.get("distance_public_transport")
     if dist_pt is not None:
         score += max(0.0, (500 - dist_pt) / 500) * 0.4
@@ -67,18 +96,28 @@ def _score(listing: dict[str, Any], soft: HardFilters) -> float:
 
 def _reason(listing: dict[str, Any], soft: HardFilters) -> str:
     parts = []
+
     price = listing.get("price")
+    area = listing.get("area")
+
     if price and soft.max_price and price <= soft.max_price:
         parts.append(f"price {price} CHF within budget")
+
+    if price and area:
+        ppm2 = round(price / area, 1)
+        parts.append(f"{ppm2} CHF/m²")
+
     if soft.features:
         matched = [f for f in soft.features if listing.get(f"feature_{f}") == 1]
         if matched:
-            parts.append(f"has preferred features: {', '.join(matched)}")
+            parts.append(f"has features: {', '.join(matched)}")
+
     if soft.city:
         city = listing.get("city", "")
         if any(city.lower() == c.lower() for c in soft.city):
-            parts.append(f"in preferred city {city}")
-    return "; ".join(parts) if parts else "matched hard filters"
+            parts.append(f"in {city}")
+
+    return "; ".join(parts) if parts else "good candidate"
 
 
 def _to_listing_data(c: dict[str, Any]) -> ListingData:
