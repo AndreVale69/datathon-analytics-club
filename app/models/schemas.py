@@ -63,6 +63,12 @@ FeatureName = Literal[
 SortOrder = Literal["price_asc", "price_desc", "rooms_asc", "rooms_desc", "area_asc", "area_desc"]
 
 
+class GeoTarget(BaseModel):
+    label: str | None = None
+    latitude: float
+    longitude: float
+
+
 # ── Hard filter schema ───────────────────────────────────────────────────────
 # Single source of truth: LLM structured-output target AND DB query filter.
 # Every field maps 1-to-1 to a filterable column in the listings SQLite table.
@@ -101,6 +107,7 @@ class HardFilters(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
     radius_km: float | None = Field(default=None, ge=0)
+    geo_targets: list[GeoTarget] | None = None
 
     # ── Boolean feature columns (feature_* INTEGER 0/1, AND semantics) ───────
     features: list[FeatureName] | None = None

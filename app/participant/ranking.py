@@ -10,20 +10,26 @@ from app.models.schemas import HardFilters, ListingData, RankedListingResult
 def rank_listings(
     candidates: list[dict[str, Any]],
     soft: HardFilters,
+    hard: HardFilters | None = None,
 ) -> list[RankedListingResult]:
+    hard_filters = hard or HardFilters()
     results = [
         RankedListingResult(
             listing_id=str(c["listing_id"]),
-            score=_score(c, soft),
-            reason=_reason(c, soft),
+            score=_score(c, soft, hard_filters),
+            reason=_reason(c, soft, hard_filters),
             listing=_to_listing_data(c),
         )
         for c in candidates
     ]
-    return sorted(results, key=lambda x: x.score, reverse=True)
+    return sorted(
+        results,
+        key=lambda item: _sort_key(item, hard_filters),
+        reverse=True,
+    )
 
 
-def _score(listing: dict[str, Any], soft: HardFilters) -> float:
+def _score(listing: dict[str, Any], soft: HardFilters, hard: HardFilters) -> float:
     score = 0.0
 
     price = listing.get("price")
@@ -92,25 +98,34 @@ def _score(listing: dict[str, Any], soft: HardFilters) -> float:
     if dist_pt is not None:
         score += max(0.0, (500 - dist_pt) / 500) * 0.4
 
-    # ── Soft geolocation preference ───────────────────────────────────────────
+    # ── Geolocation preference and hard-radius closeness ─────────────────────
     listing_lat = listing.get("latitude")
     listing_lon = listing.get("longitude")
-    if (
-        listing_lat is not None
-        and listing_lon is not None
-        and soft.latitude is not None
-        and soft.longitude is not None
-    ):
-        dist_km = _distance_km(soft.latitude, soft.longitude, listing_lat, listing_lon)
-        if soft.radius_km:
-            score += max(0.0, 1.0 - dist_km / soft.radius_km) * 1.2
-        else:
-            score += max(0.0, 1.0 - dist_km / 15.0) * 0.8
+    if listing_lat is not None and listing_lon is not None:
+        score += _location_score(listing_lat, listing_lon, hard, weight=5.0, strict=True)
+        score += _location_score(listing_lat, listing_lon, soft, weight=4.0, strict=False)
 
     return round(score, 4)
 
 
-def _reason(listing: dict[str, Any], soft: HardFilters) -> str:
+def _sort_key(result: RankedListingResult, hard: HardFilters) -> tuple[float, float]:
+    """
+    Hard location queries should primarily rank by proximity to the required point.
+    Score remains the tiebreaker within the same distance band.
+    """
+    if result.listing.latitude is not None and result.listing.longitude is not None:
+        distance = _nearest_target_distance(
+            result.listing.latitude,
+            result.listing.longitude,
+            hard,
+        )
+        if distance is not None:
+            return -distance, result.score
+
+    return result.score, 0.0
+
+
+def _reason(listing: dict[str, Any], soft: HardFilters, hard: HardFilters) -> str:
     parts = []
 
     price = listing.get("price")
@@ -133,20 +148,69 @@ def _reason(listing: dict[str, Any], soft: HardFilters) -> str:
         if any(city.lower() == c.lower() for c in soft.city):
             parts.append(f"in {city}")
 
-    if (
-        listing.get("latitude") is not None
-        and listing.get("longitude") is not None
-        and soft.latitude is not None
-        and soft.longitude is not None
-    ):
-        dist_km = _distance_km(
-            soft.latitude,
-            soft.longitude,
-            listing["latitude"],
-            listing["longitude"],
-        )
-        parts.append(f"{dist_km:.1f} km from preferred location")
+    listing_lat = listing.get("latitude")
+    listing_lon = listing.get("longitude")
+    if listing_lat is not None and listing_lon is not None:
+        if _has_geo_target(hard):
+            dist_km = _nearest_target_distance(listing_lat, listing_lon, hard)
+            assert dist_km is not None
+            parts.append(f"{dist_km:.1f} km from required location")
+        elif _has_geo_target(soft):
+            dist_km = _nearest_target_distance(listing_lat, listing_lon, soft)
+            assert dist_km is not None
+            parts.append(f"{dist_km:.1f} km from preferred location")
     return "; ".join(parts) if parts else "good candidate"
+
+
+def _location_score(
+    listing_lat: float,
+    listing_lon: float,
+    target: HardFilters,
+    *,
+    weight: float,
+    strict: bool,
+) -> float:
+    dist_km = _nearest_target_distance(listing_lat, listing_lon, target)
+    if dist_km is None:
+        return 0.0
+    preferred_radius_km = target.radius_km or 3.0
+    effective_radius_km = min(preferred_radius_km, 4.0)
+
+    if dist_km <= effective_radius_km:
+        closeness = max(0.0, 1.0 - (dist_km / effective_radius_km))
+        if strict:
+            return weight + (closeness**2) * weight
+        return (weight * 0.5) + (closeness**2) * weight
+
+    overflow = dist_km - effective_radius_km
+    penalty_span = max(preferred_radius_km, effective_radius_km)
+    penalty = min(weight if strict else weight * 0.75, 1.0 + overflow / penalty_span)
+    return -penalty
+
+
+def _has_geo_target(target: HardFilters) -> bool:
+    return bool(target.geo_targets) or (
+        target.latitude is not None and target.longitude is not None
+    )
+
+
+def _nearest_target_distance(
+    listing_lat: float,
+    listing_lon: float,
+    target: HardFilters,
+) -> float | None:
+    target_points = [
+        (geo_target.latitude, geo_target.longitude)
+        for geo_target in (target.geo_targets or [])
+    ]
+    if not target_points and target.latitude is not None and target.longitude is not None:
+        target_points = [(target.latitude, target.longitude)]
+    if not target_points:
+        return None
+    return min(
+        _distance_km(target_lat, target_lon, listing_lat, listing_lon)
+        for target_lat, target_lon in target_points
+    )
 
 
 def _to_listing_data(c: dict[str, Any]) -> ListingData:

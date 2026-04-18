@@ -26,7 +26,7 @@ def query_from_text(
     candidates = filter_soft_facts(candidates, constraints.soft)
 
     return ListingsResponse(
-        listings=rank_listings(candidates, constraints.soft),
+        listings=rank_listings(candidates, constraints.soft, constraints.hard),
         meta={
             "hard": constraints.hard.model_dump(exclude_none=True, exclude_defaults=True),
             "soft": constraints.soft.model_dump(exclude_none=True, exclude_defaults=True),
@@ -44,7 +44,7 @@ def query_from_filters(
     candidates = search_listings(db_path, to_hard_filter_params(hard))
     candidates = filter_soft_facts(candidates, soft)
     return ListingsResponse(
-        listings=rank_listings(candidates, soft),
+        listings=rank_listings(candidates, soft, hard),
         meta={
             "hard": hard.model_dump(exclude_none=True, exclude_defaults=True),
             "soft": {},
@@ -67,6 +67,9 @@ def to_hard_filter_params(hard_facts: HardFilters) -> HardFilterParams:
         latitude=hard_facts.latitude,
         longitude=hard_facts.longitude,
         radius_km=hard_facts.radius_km,
+        geo_targets=[
+            (target.latitude, target.longitude) for target in (hard_facts.geo_targets or [])
+        ] or None,
         features=hard_facts.features,
         offer_type=hard_facts.offer_type,
         object_category=hard_facts.object_category,
