@@ -45,6 +45,10 @@ FEATURE_COLUMN_MAP = {
 }
 
 
+def _normalize_umlauts(s: str) -> str:
+    return s.replace("ü", "u").replace("ö", "o").replace("ä", "a").replace("é", "e").replace("è", "e")
+
+
 def _normalize_list(values: list[str] | None) -> list[str] | None:
     if not values:
         return None
@@ -59,8 +63,13 @@ def search_listings(db_path: Path, filters: HardFilterParams) -> list[dict[str, 
     city = _normalize_list(filters.city)
     if city:
         placeholders = ", ".join("?" for _ in city)
-        where_clauses.append(f"LOWER(city) IN ({placeholders})")
-        params.extend(value.lower() for value in city)
+        # Normalize umlauts in both DB value and input so "Zurich" matches "Zürich"
+        umlaut_sql = (
+            "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(city),"
+            "'ü','u'),'ö','o'),'ä','a'),'é','e'),'è','e')"
+        )
+        where_clauses.append(f"{umlaut_sql} IN ({placeholders})")
+        params.extend(_normalize_umlauts(v.lower()) for v in city)
 
     postal_code = _normalize_list(filters.postal_code)
     if postal_code:
