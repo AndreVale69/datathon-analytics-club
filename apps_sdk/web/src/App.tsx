@@ -7,6 +7,7 @@ type ListingData = {
   title: string;
   city?: string | null;
   canton?: string | null;
+  street?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   image_urls?: string[] | null;
@@ -33,6 +34,7 @@ export default function App() {
   const [isOpen, setIsOpen]     = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId]   = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(10);
 
   async function search() {
     if (!query.trim()) return;
@@ -40,17 +42,16 @@ export default function App() {
     setError(null);
     setIsOpen(true);
     setResults([]);
+    setVisibleCount(10);
     try {
       const res = await fetch(`${API_BASE}/listings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, limit: 20 }),
+        body: JSON.stringify({ query, limit: 500 }),
       });
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
-      console.log("[API response]", data);
       const listings: RankedListingResult[] = data.listings ?? [];
-      console.log("[listings]", listings);
       setResults(listings);
       setSelectedId(null);
     } catch (e) {
@@ -67,12 +68,17 @@ export default function App() {
     [results],
   );
 
+  const visibleResults = useMemo(
+    () => mappableResults.slice(0, visibleCount),
+    [mappableResults, visibleCount],
+  );
+
   return (
     <div className="app-shell">
 
       <main className={`map-panel ${isOpen ? "shrink" : "full"}`}>
         <ListingsMap
-          results={mappableResults}
+          results={visibleResults}
           selectedId={selectedId}
           hoveredId={hoveredId}
           onSelect={setSelectedId}
@@ -97,7 +103,7 @@ export default function App() {
               {loading
                 ? ""
                 : mappableResults.length
-                  ? `${mappableResults.length} result${mappableResults.length === 1 ? "" : "s"}`
+                  ? `${visibleResults.length} of ${mappableResults.length} result${mappableResults.length === 1 ? "" : "s"}`
                   : "No results"}
             </p>
           </div>
@@ -118,15 +124,25 @@ export default function App() {
                 </div>
               ))}
             </div>
-          ) : mappableResults.length > 0 ? (
-          <RankedList
-            results={mappableResults}
-            selectedId={selectedId}
-            hoveredId={hoveredId}
-            onSelect={setSelectedId}
-            onHover={setHoveredId}
-          />
-          ) : null}
+          ) : visibleResults.length > 0 ? (<>
+            <RankedList
+              results={visibleResults}
+              selectedId={selectedId}
+              hoveredId={hoveredId}
+              onSelect={setSelectedId}
+              onHover={setHoveredId}
+            />
+            {visibleCount < mappableResults.length && (
+              <div className="show-more-wrap">
+                <button
+                  className="show-more-btn"
+                  onClick={() => setVisibleCount((c) => c + 10)}
+                >
+                  Show more ({mappableResults.length - visibleCount} remaining)
+                </button>
+              </div>
+            )}
+          </>) : null}
         </aside>
       )}
 
@@ -134,7 +150,7 @@ export default function App() {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search apartments in Zurich..."
+          placeholder="Tell Robin what you're looking for…"
           disabled={loading}
           onKeyDown={(e) => { if (e.key === "Enter") search(); }}
         />

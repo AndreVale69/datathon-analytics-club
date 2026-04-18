@@ -10,6 +10,8 @@ type ListingData = {
   latitude?: number | null;
   longitude?: number | null;
   price_chf?: number | null;
+  rooms?: number | null;
+  street?: string | null;
 };
 
 type RankedListingResult = {
@@ -67,9 +69,9 @@ function makePinSvg(color: string, rank: number): string {
 }
 
 function scoreColor(score: number): string {
-  if (score > 0.8) return "#22c55e";
+  if (score > 0.8) return "#5c5ce0";
   if (score > 0.5) return "#f5a040";
-  return "#ef4444";
+  return "#bbbbbb";
 }
 
 function applyPinStyle(el: HTMLElement, isHovered: boolean) {
@@ -161,13 +163,21 @@ export default function ListingsMap({
 
       applyPinStyle(inner, hoveredId === result.listing_id);
 
+      const price = result.listing.price_chf
+        ? new Intl.NumberFormat("de-CH", { style: "currency", currency: "CHF", maximumFractionDigits: 0 }).format(result.listing.price_chf)
+        : null;
+      const rooms = result.listing.rooms ? `${result.listing.rooms} rooms` : null;
+      const street = result.listing.street ?? result.listing.city ?? null;
+
+      const popup = new maplibregl.Popup({ offset: 52, closeButton: false, className: "robin-popup" })
+        .setHTML(`
+          <div class="robin-popup-title">${[price, rooms].filter(Boolean).join(" · ")}</div>
+          ${street ? `<div class="robin-popup-meta">${street}</div>` : ""}
+        `);
+
       const marker = new maplibregl.Marker({ element: wrapper, anchor: "bottom" })
         .setLngLat([result.listing.longitude!, result.listing.latitude!])
-        .setPopup(
-          new maplibregl.Popup({ offset: 12 }).setHTML(
-            `<strong>${result.listing.title}</strong><br/>${result.listing.city ?? ""}`,
-          ),
-        )
+        .setPopup(popup)
         .addTo(map);
 
       markersRef.current.push(marker);
