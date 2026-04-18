@@ -4,14 +4,9 @@ import copy
 import logging
 import os
 
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import Runnable
-from langchain_openai import ChatOpenAI
-
 from project_env import load_project_env
 from app.models.schemas import HardFilters, QueryConstraints
 from app.participant.geolocation_extractor import enrich_constraints_with_geolocation
-from .prompts import FEW_SHOT_MESSAGES, SYSTEM_PROMPT
 
 load_project_env()
 
@@ -43,7 +38,11 @@ def _llm_schema() -> dict:
     }
 
 
-def _build_extractor() -> Runnable:
+def _build_extractor():
+    from langchain_core.prompts import ChatPromptTemplate
+    from langchain_openai import ChatOpenAI
+    from .prompts import FEW_SHOT_MESSAGES, SYSTEM_PROMPT
+
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     llm = ChatOpenAI(model=model, temperature=0, seed=42).with_structured_output(_llm_schema())
     prompt = ChatPromptTemplate.from_messages([
@@ -54,7 +53,7 @@ def _build_extractor() -> Runnable:
     return prompt | llm
 
 
-_extractor: Runnable | None = None
+_extractor = None
 
 
 def extract_constraints(query: str) -> QueryConstraints:
