@@ -45,6 +45,7 @@ def _normalize_city(city: str | None) -> str | None:
     }
 
     city = mapping.get(city_lower, city)
+    return city
 
 def _parse_int(value: str | None) -> int | None:
     number = _parse_float(value)
@@ -270,7 +271,7 @@ def prepare_listing_row(row: dict[str, str]) -> tuple[Any, ...]:
         title = None
     description = _clean_text(row.get("object_description")) or _clean_text(row.get("remarks"))
     if description and "test" in description.lower():
-        title = None
+        description=None
 
     offer_type = _clean_text(row.get("offer_type"))
     offer_type = offer_type.upper() if offer_type else None

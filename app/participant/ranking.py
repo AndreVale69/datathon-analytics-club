@@ -22,7 +22,7 @@ def compute_score(listing, soft_facts):
 
     dist = listing.get("distance_public_transport")
     if dist is not None:
-        score += max(0, 500 - dist) / 500
+        score += max(0, 300 - dist) / 300
 
     if listing.get("feature_balcony") == 1:
         score += 1
