@@ -36,6 +36,8 @@ class Settings:
     s3_bucket: str
     s3_region: str
     s3_prefix: str
+    geocoding_api_base_url: str
+    geocoding_timeout_seconds: float
 
 
 def get_settings() -> Settings:
@@ -48,4 +50,9 @@ def get_settings() -> Settings:
         ),
         s3_region=os.getenv("LISTINGS_S3_REGION", "eu-central-2"),
         s3_prefix=os.getenv("LISTINGS_S3_PREFIX", "prod"),
+        geocoding_api_base_url=os.getenv(
+            "GEOCODING_API_BASE_URL",
+            "https://api3.geo.admin.ch/rest/services/ech/SearchServer",
+        ),
+        geocoding_timeout_seconds=float(os.getenv("GEOCODING_TIMEOUT_SECONDS", "5.0")),
     )

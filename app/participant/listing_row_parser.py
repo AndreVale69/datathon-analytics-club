@@ -80,8 +80,8 @@ def _normalize_city(city: str | None) -> str | None:
 
     city = mapping.get(city_lower, city_clean)
 
-    if city and city.isdigit():
-        city = None
+    if city and len(city) <= 2:
+        return None
 
     return city
 
@@ -174,6 +174,18 @@ def _parse_date(value: str | None) -> str | None:
 
     return None
 
+def _is_dirty(row: dict[str, str]) -> bool:
+    fields = [
+        row.get("title"),
+        row.get("object_description"),
+        row.get("remarks"),
+    ]
+
+    for f in fields:
+        if f and "test" in f.lower():
+            return True
+
+    return False
 
 def _derive_price(row: dict[str, str]) -> int | None:
     for key in ("rent_gross", "price"):
@@ -297,16 +309,30 @@ def _derive_features(
 
 
 def prepare_listing_row(row: dict[str, str]) -> tuple[Any, ...]:
+    if _is_dirty(row):
+        return None
     location = _parse_json_object(row.get("location_address"))
     city = _clean_text(row.get("object_city")) or _clean_text(location.get("City"))
     city = _normalize_city(city)
+    if city is None:
+        return None
     postal_code = _clean_text(row.get("object_zip")) or _clean_text(location.get("PostalCode"))
     canton = _clean_text(row.get("object_state")) or _clean_text(location.get("canton"))
     canton = canton.upper() if canton else None
     title = _clean_text(row.get("title")) or "Untitled listing"
+    price = _derive_price(row)
 
-    if title and "test" in title.lower():
-        title = None
+    if price is None or price < 100 or price > 15000:
+        return None
+
+    rooms = _parse_float(row.get("number_of_rooms"))
+
+    if rooms is None or rooms < 1 or rooms > 20:
+        return None
+
+    if not (rooms * 2).is_integer():
+        return None
+
     description = _clean_text(row.get("object_description")) or _clean_text(row.get("remarks"))
     if description and "test" in description.lower():
         description=None
@@ -318,6 +344,27 @@ def prepare_listing_row(row: dict[str, str]) -> tuple[Any, ...]:
     images = _parse_json_object(row.get("images"))
     location_address = _parse_json_object(row.get("location_address"))
     street = _clean_text(row.get("object_street"))
+
+    lat = _parse_float(row.get("geo_lat"))
+    lon = _parse_float(row.get("geo_lng"))
+
+    if lat is not None and lon is not None:
+        if lat == 0 or lon == 0:
+            lat, lon = None, None
+
+    area = _parse_float(row.get("area"))
+
+    if area is not None and area < 15:
+        area = None
+
+    if area is None:
+        return None
+
+    price_per_m2 = price / area
+
+    if price_per_m2 < 5 or price_per_m2 > 100:
+        return None
+
     if street is None:
         street_name = _clean_text(location.get("Street"))
         street_number = _clean_text(location.get("StreetNumber"))
@@ -336,12 +383,12 @@ def prepare_listing_row(row: dict[str, str]) -> tuple[Any, ...]:
         city,
         postal_code,
         canton,
-        _derive_price(row),
-        _parse_float(row.get("number_of_rooms")),
-        _parse_float(row.get("area")),
+        price,
+        rooms,
+        area,
         _parse_date(row.get("available_from")),
-        _parse_float(row.get("geo_lat")),
-        _parse_float(row.get("geo_lng")),
+        lat,
+        lon,
         _parse_int(row.get("distance_public_transport")),
         _parse_int(row.get("distance_shop")),
         _parse_int(row.get("distance_kindergarten")),

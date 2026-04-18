@@ -102,14 +102,6 @@ class HardFilters(BaseModel):
     longitude: float | None = None
     radius_km: float | None = Field(default=None, ge=0)
 
-    # ── Distance filters (meters) ─────────────────────────────────────────────
-    # WARNING: very sparse — only 2-3% of listings have these values.
-    # Still useful when present (e.g. explicit "max 300m to station" query).
-    max_distance_public_transport: int | None = Field(default=None, ge=0)
-    max_distance_shop: int | None = Field(default=None, ge=0)
-    max_distance_kindergarten: int | None = Field(default=None, ge=0)
-    max_distance_school: int | None = Field(default=None, ge=0)
-
     # ── Boolean feature columns (feature_* INTEGER 0/1, AND semantics) ───────
     features: list[FeatureName] | None = None
 

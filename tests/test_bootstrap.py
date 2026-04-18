@@ -191,7 +191,7 @@ def test_prepare_listing_row_extracts_comparis_style_features() -> None:
     assert prepared[3] == "Comparis listing"
     assert prepared[4] == "Bright apartment"
     assert prepared[5] == "Main Street 10"
-    assert prepared[6] == "Zurich"
+    assert prepared[6] == "Zürich"
     assert prepared[7] == "8001"
     assert prepared[8] == "ZH"
     assert prepared[9] == 2250
