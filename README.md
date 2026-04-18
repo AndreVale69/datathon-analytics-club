@@ -211,6 +211,12 @@ curl http://localhost:8001/mcp
 
 The frontend widget on port `8001` is meant to be loaded by an MCP-compatible host, not used as a normal browser app page.
 
+To run the test suite in Docker:
+
+```bash
+docker compose run --rm tests
+```
+
 ### 4. To see the frontend in a browser
 
 If you want to see the React frontend as a normal webpage, run the Vite dev server separately:
@@ -314,10 +320,16 @@ http://localhost:8001/mcp
 
 ## Useful Commands
 
-Run tests:
+Run tests locally with `uv`:
 
 ```bash
 uv run pytest
+```
+
+Run tests with Docker Compose:
+
+```bash
+docker compose run --rm tests
 ```
 
 Run the MCP smoke test after building the widget and starting the MCP server:

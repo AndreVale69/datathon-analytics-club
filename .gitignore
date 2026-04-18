@@ -23,3 +23,8 @@ raw_data/*
 !raw_data/README.md
 
 .idea
+analyze_data_quality.py
+query_houses_zurich.py
+test_query.sh
+test_extractor.sh
+clean_cities.py
