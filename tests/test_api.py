@@ -42,7 +42,25 @@ def test_post_listings_returns_ranked_results(tmp_path: Path) -> None:
     assert isinstance(body["listings"][0]["reason"], str)
 
 
-def test_post_listings_resolves_image_urls_via_storage_helper(tmp_path: Path, monkeypatch) -> None:
+def test_post_listings_omits_expensive_image_resolution_in_primary_search_response(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    os.environ["LISTINGS_RAW_DATA_DIR"] = str(repo_root / "raw_data")
+    os.environ["LISTINGS_DB_PATH"] = str(tmp_path / "listings.db")
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        response = client.post("/listings", json={"query": "Wohnen im Herzen von Zürich!"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["listings"]
+    listing = body["listings"][0]["listing"]
+    assert listing["image_urls"] == []
+    assert listing["hero_image_url"] is None
+
+
+def test_post_listings_images_resolves_image_urls_via_storage_helper(tmp_path: Path, monkeypatch) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     os.environ["LISTINGS_RAW_DATA_DIR"] = str(repo_root / "raw_data")
     os.environ["LISTINGS_DB_PATH"] = str(tmp_path / "listings.db")
@@ -55,17 +73,20 @@ def test_post_listings_resolves_image_urls_via_storage_helper(tmp_path: Path, mo
     from app.main import app
 
     with TestClient(app) as client:
-        response = client.post("/listings", json={"query": "Wohnen im Herzen von Zürich!"})
+        response = client.post("/listings/images", json={"listing_ids": ["220122"]})
 
     assert response.status_code == 200
     body = response.json()
-    assert body["listings"]
-    listing = body["listings"][0]["listing"]
-    assert listing["image_urls"] == ["https://example-bucket.s3.eu-central-2.amazonaws.com/resolved.jpg"]
-    assert listing["hero_image_url"] == "https://example-bucket.s3.eu-central-2.amazonaws.com/resolved.jpg"
+    assert body["listings"] == [
+        {
+            "listing_id": "220122",
+            "image_urls": ["https://example-bucket.s3.eu-central-2.amazonaws.com/resolved.jpg"],
+            "hero_image_url": "https://example-bucket.s3.eu-central-2.amazonaws.com/resolved.jpg",
+        }
+    ]
 
 
-def test_post_listings_does_not_leak_raw_upstream_image_templates_when_s3_lookup_fails(
+def test_post_listings_images_does_not_leak_raw_upstream_image_templates_when_s3_lookup_fails(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -85,12 +106,12 @@ def test_post_listings_does_not_leak_raw_upstream_image_templates_when_s3_lookup
     from app.main import app
 
     with TestClient(app) as client:
-        response = client.post("/listings", json={"query": "Wohnen im Herzen von Zürich!"})
+        response = client.post("/listings/images", json={"listing_ids": ["220122"]})
 
     assert response.status_code == 200
     body = response.json()
     assert body["listings"]
-    listing = body["listings"][0]["listing"]
+    listing = body["listings"][0]
     assert listing["image_urls"] == []
     assert listing["hero_image_url"] is None
 

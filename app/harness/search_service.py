@@ -26,7 +26,7 @@ def query_from_text(
     constraints.hard.offset = offset
 
     candidates = search_listings(db_path, to_hard_filter_params(constraints.hard))
-    _hydrate_candidate_image_urls(candidates, db_path=db_path)
+    _clear_candidate_image_urls(candidates)
 
     query_similarities = compute_query_similarities(query, candidates)
     extracted_features = extract_features_from_descriptions(candidates, query_similarities)
@@ -48,7 +48,7 @@ def query_from_filters(
     hard = hard_facts or HardFilters()
     soft = QueryConstraints.SoftFilters()
     candidates = search_listings(db_path, to_hard_filter_params(hard))
-    _hydrate_candidate_image_urls(candidates, db_path=db_path)
+    _clear_candidate_image_urls(candidates)
     candidates = filter_soft_facts(candidates, soft)
     return ListingsResponse(
         listings=rank_listings(candidates, soft, hard),
@@ -86,17 +86,36 @@ def to_hard_filter_params(hard_facts: HardFilters) -> HardFilterParams:
     )
 
 
-def _hydrate_candidate_image_urls(candidates: list[dict[str, Any]], *, db_path: Path) -> None:
-    for candidate in candidates:
-        listing_id = candidate.get("listing_id")
-        if not listing_id:
+def resolve_listing_images(
+    *,
+    db_path: Path,
+    listing_ids: list[str],
+) -> list[dict[str, Any]]:
+    resolved: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for listing_id in listing_ids:
+        cleaned = str(listing_id).strip()
+        if not cleaned or cleaned in seen:
             continue
+        seen.add(cleaned)
         try:
             image_urls = get_image_urls_by_listing_id(
                 db_path=db_path,
-                listing_id=str(listing_id),
+                listing_id=cleaned,
             )
         except Exception:
             image_urls = []
-        candidate["image_urls"] = image_urls
-        candidate["hero_image_url"] = image_urls[0] if image_urls else None
+        resolved.append(
+            {
+                "listing_id": cleaned,
+                "image_urls": image_urls,
+                "hero_image_url": image_urls[0] if image_urls else None,
+            }
+        )
+    return resolved
+
+
+def _clear_candidate_image_urls(candidates: list[dict[str, Any]]) -> None:
+    for candidate in candidates:
+        candidate["image_urls"] = []
+        candidate["hero_image_url"] = None
