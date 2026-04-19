@@ -97,7 +97,8 @@ body {
 }
 
 .listing-image-wrap {
-  margin: -2px -2px 10px;
+  width: calc(100% + 24px);
+  margin: -10px -12px 10px;
   border-radius: 10px;
   overflow: hidden;
   aspect-ratio: 16 / 7;
