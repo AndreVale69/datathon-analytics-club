@@ -160,6 +160,14 @@ FEW_SHOT_MESSAGES = [
     HumanMessage(content='Studio in Geneva, near the train station, under 1500 CHF'),
     AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Studio"],"max_price":1500,"city":["Geneva","Genève"]},"soft":{}}'),
 
+    # short named-place proximity only → no schema fields here; geocoding pipeline handles ETH
+    HumanMessage(content='possibly near ETH'),
+    AIMessage(content='{"hard":{},"soft":{}}'),
+
+    # explicit distance from ETH still belongs to geocoding pipeline, not to hard filter schema
+    HumanMessage(content='within 2 km from ETH'),
+    AIMessage(content='{"hard":{},"soft":{}}'),
+
     # "affordable" too vague; "near ETH" is a named-place proximity → omit (geocoding pipeline);
     # WG-Zimmer is hard type; city is hard; pets soft wish
     HumanMessage(content='Looking for affordable student accommodation in Zurich, near ETH, ideally pets allowed'),

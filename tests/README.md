@@ -96,3 +96,24 @@ The production geocoding helper calls the Swiss GeoAdmin search endpoint configu
 If the geocoding request fails, returns no result, or the payload is malformed, the code falls back to the existing hard filters without adding `latitude`, `longitude`, or `radius_km`.
 
 So the search still works, but place-resolution-based geographic filtering will not be applied for that query.
+
+## Debugging Live Geolocation Behavior
+
+If you want to understand whether the live place-extraction path is actually running, enable:
+
+```bash
+GEOLOCATION_DEBUG=1
+```
+
+This makes `app/participant/geolocation_extractor.py` log:
+
+- whether LLM-based geolocation extraction succeeded or fell back
+- which hard and soft place queries were extracted
+- whether geocoding returned usable coordinates
+- the final `latitude`, `longitude`, and `radius_km` applied to the constraints
+
+Important:
+
+- if `OPENAI_API_KEY` is missing, the geolocation extractor falls back to empty place constraints
+- in that case, prompts such as `near ETH` will not enrich the query at runtime, even though the mocked unit tests still pass
+- the unit tests validate the behavior of the geolocation pipeline once the extractor returns place intent; they do not prove that the live LLM extractor is available in the current environment

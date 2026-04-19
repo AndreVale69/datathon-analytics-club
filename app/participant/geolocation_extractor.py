@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-import math
+import logging
 import os
 
 from pydantic import BaseModel, Field
 
-from app.core.geocoding import GeocodedPlace, geocode_place
-from app.models.schemas import HardFilters, QueryConstraints
+from app.core.geocoding import GeocodedPlace, geocode_places
+from app.models.schemas import GeoTarget, HardFilters, QueryConstraints
+
+logger = logging.getLogger(__name__)
 
 
 _GEOLOCATION_SYSTEM_PROMPT = """\
@@ -23,11 +25,17 @@ Each may contain:
 
 Rules:
   INCLUDE — specific named places:
-    "near ETH Zurich"          → query="ETH Zurich"
+    "near ETH"                 → query="ETH"
+    "near ETH Zurich"          → query="ETH"
     "close to Zurich HB"       → query="Zurich HB"
     "within 2km of Paradeplatz"→ query="Paradeplatz Zurich", radius_km=2
     "près de la gare de Sion"  → query="Gare de Sion"
     "nahe Universität Bern"    → query="Universität Bern"
+
+  Short-name disambiguation:
+    In Swiss housing-search context, if the user says just "ETH", assume the
+    ETH / Universität quarter in Zurich and use query="ETH"
+    unless the query clearly names another institution.
 
   EXCLUDE — generic amenity types (handled by distance fields elsewhere):
     "near a school", "close to public transport", "near a shop", "near kindergarten"
@@ -39,6 +47,14 @@ Rules:
 
   hard  : user clearly requires proximity ("must", "need", "max X km from").
   soft  : user expresses a preference ("ideally", "if possible", "would like to be near").
+
+  Classification examples:
+    "near ETH"                       → hard place query "ETH"
+    "within 2 km from ETH"           → hard place query "ETH" with radius_km=2
+    "possibly near ETH"              → soft place query "ETH"
+    "ideally near ETH Zurich"        → soft place query "ETH"
+    "if possible close to Zurich HB" → soft place query "Zurich HB"
+    "must be near ETH"               → hard place query "ETH"
 
   If no specific named place is found, return {{"hard": {{}}, "soft": {{}}}}.
   If no explicit radius is given, omit radius_km (a default will be applied).
@@ -77,8 +93,10 @@ def extract_geolocation_constraints(query: str) -> GeolocationConstraints:
             [("system", _GEOLOCATION_SYSTEM_PROMPT), ("human", "{query}")]
         )
         raw = (prompt | llm).invoke({"query": query})
-        return GeolocationConstraints(**raw)
-    except Exception:
+        constraints = GeolocationConstraints(**raw)
+        return constraints
+    except Exception as exc:
+        logger.warning("Geolocation extraction unavailable for query %r: %s", query, exc)
         return GeolocationConstraints()
 
 
@@ -99,46 +117,22 @@ def _apply_intent(filters: HardFilters, intent: GeolocationIntent) -> None:
     if filters.latitude is not None or filters.longitude is not None:
         return
 
-    geocoded = [geocode_place(p.query) for p in intent.places]
-    geocoded = [g for g in geocoded if g is not None]
+    geocoded: list[GeocodedPlace] = []
+    for place in intent.places:
+        geocoded.extend(geocode_places(place.query))
     if not geocoded:
         return
 
-    # Compute centroid of all matched places
-    lat, lon = _centroid(geocoded)
-    filters.latitude = lat
-    filters.longitude = lon
+    filters.geo_targets = [
+        GeoTarget(label=place.label, latitude=place.latitude, longitude=place.longitude)
+        for place in geocoded
+    ]
+    # Keep the first point for backward-compatible UI/meta consumers.
+    filters.latitude = geocoded[0].latitude
+    filters.longitude = geocoded[0].longitude
 
     if filters.radius_km is None:
         # Use explicit radii from queries if provided, else default
         explicit = [p.radius_km for p in intent.places if p.radius_km is not None]
         base_radius = max(explicit) if explicit else _DEFAULT_RADIUS_KM
-
-        # If multiple points, expand radius to cover spread between them
-        if len(geocoded) > 1:
-            spread = _max_distance_from_centroid(lat, lon, geocoded)
-            filters.radius_km = round(base_radius + spread, 2)
-        else:
-            filters.radius_km = base_radius
-
-
-def _centroid(points: list[GeocodedPlace]) -> tuple[float, float]:
-    lat = sum(p.latitude for p in points) / len(points)
-    lon = sum(p.longitude for p in points) / len(points)
-    return round(lat, 6), round(lon, 6)
-
-
-def _max_distance_from_centroid(
-    clat: float, clon: float, points: list[GeocodedPlace]
-) -> float:
-    return max(_haversine_km(clat, clon, p.latitude, p.longitude) for p in points)
-
-
-def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    r = 6371.0
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(
-        math.radians(lat2)
-    ) * math.sin(dlon / 2) ** 2
-    return r * 2 * math.asin(math.sqrt(a))
+        filters.radius_km = base_radius

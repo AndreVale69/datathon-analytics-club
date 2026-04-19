@@ -10,6 +10,7 @@ from app.config import get_settings
 
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
+_ETH_QUERY_RE = re.compile(r"^\s*eth(?:\s+zurich|\s+zürich)?\s*$", re.IGNORECASE)
 
 
 @dataclass(slots=True)
@@ -19,10 +20,10 @@ class GeocodedPlace:
     longitude: float
 
 
-def geocode_place(query: str) -> GeocodedPlace | None:
-    cleaned_query = query.strip()
+def geocode_places(query: str) -> list[GeocodedPlace]:
+    cleaned_query = _normalize_query(query)
     if not cleaned_query:
-        return None
+        return []
 
     settings = get_settings()
 
@@ -41,34 +42,45 @@ def geocode_place(query: str) -> GeocodedPlace | None:
         response.raise_for_status()
         payload = response.json()
     except (httpx.HTTPError, ValueError):
-        return None
+        return []
 
     if not isinstance(payload, dict):
-        return None
+        return []
 
     results = payload.get("results")
     if not isinstance(results, list) or not results:
-        return None
+        return []
 
-    first_result = results[0]
-    if not isinstance(first_result, dict):
-        return None
+    places: list[GeocodedPlace] = []
+    seen: set[tuple[float, float]] = set()
+    for result in results:
+        if not isinstance(result, dict):
+            continue
+        attrs = result.get("attrs")
+        if not isinstance(attrs, dict):
+            continue
+        latitude = _coerce_float(attrs.get("lat"))
+        longitude = _coerce_float(attrs.get("lon"))
+        if latitude is None or longitude is None:
+            continue
+        key = (latitude, longitude)
+        if key in seen:
+            continue
+        seen.add(key)
+        label = str(attrs.get("label") or attrs.get("detail") or cleaned_query)
+        places.append(
+            GeocodedPlace(
+                label=_strip_html(label),
+                latitude=latitude,
+                longitude=longitude,
+            )
+        )
+    return places
 
-    attrs = first_result.get("attrs")
-    if not isinstance(attrs, dict):
-        return None
 
-    latitude = _coerce_float(attrs.get("lat"))
-    longitude = _coerce_float(attrs.get("lon"))
-    if latitude is None or longitude is None:
-        return None
-
-    label = str(attrs.get("label") or attrs.get("detail") or cleaned_query)
-    return GeocodedPlace(
-        label=_strip_html(label),
-        latitude=latitude,
-        longitude=longitude,
-    )
+def geocode_place(query: str) -> GeocodedPlace | None:
+    places = geocode_places(query)
+    return places[0] if places else None
 
 
 def _coerce_float(value: object) -> float | None:
@@ -80,3 +92,10 @@ def _coerce_float(value: object) -> float | None:
 
 def _strip_html(value: str) -> str:
     return unescape(_HTML_TAG_RE.sub("", value)).strip()
+
+
+def _normalize_query(value: str) -> str:
+    cleaned = value.strip()
+    if _ETH_QUERY_RE.fullmatch(cleaned):
+        return "ETH"
+    return cleaned

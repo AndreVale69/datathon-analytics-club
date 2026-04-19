@@ -24,6 +24,7 @@ class HardFilterParams:
     latitude: float | None = None
     longitude: float | None = None
     radius_km: float | None = None
+    geo_targets: list[tuple[float, float]] | None = None
     features: list[str] | None = None
     offer_type: str | None = None
     object_category: list[str] | None = None
@@ -176,16 +177,20 @@ def search_listings(db_path: Path, filters: HardFilterParams) -> list[dict[str, 
     parsed_rows = [_parse_row(dict(row)) for row in rows]
 
     # ── Geo radius filter (in-memory Haversine) ───────────────────────────────
-    if (
-        filters.latitude is not None
-        and filters.longitude is not None
-        and filters.radius_km is not None
-    ):
+    geo_targets = filters.geo_targets or (
+        [(filters.latitude, filters.longitude)]
+        if filters.latitude is not None and filters.longitude is not None
+        else None
+    )
+    if geo_targets and filters.radius_km is not None:
         nearby: list[tuple[float, dict[str, Any]]] = []
         for row in parsed_rows:
             if row.get("latitude") is None or row.get("longitude") is None:
                 continue
-            dist = _distance_km(filters.latitude, filters.longitude, row["latitude"], row["longitude"])
+            dist = min(
+                _distance_km(target_lat, target_lon, row["latitude"], row["longitude"])
+                for target_lat, target_lon in geo_targets
+            )
             if dist <= filters.radius_km:
                 nearby.append((dist, row))
         nearby.sort(key=lambda x: (x[0], x[1]["listing_id"]))

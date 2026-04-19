@@ -48,3 +48,75 @@ def test_rank_listings_returns_ranked_shape() -> None:
     assert ranked[0].listing.title == "Example"
     assert ranked[0].listing.city == "Zurich"
     assert ranked[0].listing.image_urls
+
+
+def test_rank_listings_prefers_closer_listing_for_hard_location() -> None:
+    candidates = [
+        {
+            "listing_id": "near",
+            "title": "Near ETH",
+            "price": 2400,
+            "rooms": 3.0,
+            "area": 80.0,
+            "latitude": 47.3773,
+            "longitude": 8.5274,
+        },
+        {
+            "listing_id": "far",
+            "title": "Farther from ETH",
+            "price": 900,
+            "rooms": 5.0,
+            "area": 120.0,
+            "feature_balcony": 1,
+            "feature_elevator": 1,
+            "feature_parking": 1,
+            "distance_public_transport": 50,
+            "latitude": 47.36,
+            "longitude": 8.49,
+        },
+    ]
+
+    ranked = rank_listings(
+        candidates=candidates,
+        soft=HardFilters(),
+        hard=HardFilters(latitude=47.377213, longitude=8.527311, radius_km=3.0),
+    )
+
+    assert [item.listing_id for item in ranked] == ["near", "far"]
+
+
+def test_rank_listings_uses_nearest_of_multiple_hard_targets() -> None:
+    candidates = [
+        {
+            "listing_id": "bovisa-home",
+            "title": "Near Bovisa",
+            "price": 2000,
+            "rooms": 3.0,
+            "area": 80.0,
+            "latitude": 45.5052,
+            "longitude": 9.1591,
+        },
+        {
+            "listing_id": "leonardo-home",
+            "title": "Near Leonardo",
+            "price": 1000,
+            "rooms": 3.0,
+            "area": 80.0,
+            "latitude": 45.4781,
+            "longitude": 9.2282,
+        },
+    ]
+
+    ranked = rank_listings(
+        candidates=candidates,
+        soft=HardFilters(max_price=1500),
+        hard=HardFilters(
+            radius_km=2.0,
+            geo_targets=[
+                {"label": "Bovisa", "latitude": 45.505, "longitude": 9.159},
+                {"label": "Leonardo", "latitude": 45.478, "longitude": 9.228},
+            ],
+        ),
+    )
+
+    assert [item.listing_id for item in ranked] == ["leonardo-home", "bovisa-home"]
