@@ -83,21 +83,32 @@ def _geo_score(listing: dict[str, Any], soft: HardFilters, hard: HardFilters) ->
     return max(0.0, 1.0 - dist_km / radius)
 
 
+_HOUSE_CATEGORIES = {"Haus", "Villa", "Reihenhaus", "Doppeleinfamilienhaus",
+                     "Mehrfamilienhaus", "Bauernhaus", "Terrassenhaus"}
+_ROOFTOP_CATEGORIES = {"Dachwohnung", "Attika"}
+_TERRACE_CATEGORIES = {"Terrassenwohnung", "Maisonette"}
+
+
 def _count_soft_constraints(soft: HardFilters) -> int:
-    """Count how many soft criteria are active (same criteria as _soft_score uses)."""
+    """Count scoreable soft criteria (mirrors _soft_score — only what we can verify)."""
     n = 0
-    if soft.features:       n += 1
-    if soft.max_price:      n += 1
-    if soft.min_rooms:      n += 1
-    if soft.min_area:       n += 1
-    if soft.city:           n += 1
-    if getattr(soft, "furnished", None): n += 1
+    if soft.features:                           n += 1
+    if soft.max_price:                          n += 1
+    if soft.min_rooms:                          n += 1
+    if soft.min_area:                           n += 1
+    if soft.city:                               n += 1
+    if getattr(soft, "furnished", None):        n += 1
+    if getattr(soft, "garden", None):           n += 1
+    if getattr(soft, "min_bedrooms", None):     n += 1
+    if getattr(soft, "rooftop", None):          n += 1
+    if getattr(soft, "terrace", None):          n += 1
     return n
 
 
 def _soft_score(listing: dict[str, Any], soft: HardFilters) -> float:
-    """Average of per-criterion [0,1] scores for every soft preference that is set."""
+    """Average of per-criterion [0,1] scores for every verifiable soft preference."""
     scores: list[float] = []
+    cat = listing.get("object_category") or ""
 
     # Requested features
     if soft.features:
@@ -126,7 +137,26 @@ def _soft_score(listing: dict[str, Any], soft: HardFilters) -> float:
 
     # Furnished
     if getattr(soft, "furnished", None):
-        scores.append(1.0 if listing.get("object_category") == "Möblierte Wohnung" else 0.0)
+        scores.append(1.0 if cat == "Möblierte Wohnung" else 0.0)
+
+    # Garden — proxy: house-type category
+    if getattr(soft, "garden", None):
+        scores.append(1.0 if cat in _HOUSE_CATEGORIES else 0.0)
+
+    # Min bedrooms — approximated: bedrooms ≈ rooms − 1 (Swiss notation)
+    min_bed = getattr(soft, "min_bedrooms", None)
+    if min_bed and rooms:
+        estimated_bedrooms = max(0.0, rooms - 1)
+        scores.append(1.0 if estimated_bedrooms >= min_bed else
+                      max(0.0, estimated_bedrooms / min_bed))
+
+    # Rooftop access — Dachwohnung / Attika
+    if getattr(soft, "rooftop", None):
+        scores.append(1.0 if cat in _ROOFTOP_CATEGORIES else 0.0)
+
+    # Terrace — Terrassenwohnung / Maisonette
+    if getattr(soft, "terrace", None):
+        scores.append(1.0 if cat in _TERRACE_CATEGORIES else 0.0)
 
     if not scores:
         return 0.0
@@ -141,9 +171,9 @@ def _reason(listing: dict[str, Any], soft: HardFilters, hard: HardFilters, query
     geo    = _geo_score(listing, soft, hard)
     soft_s = _soft_score(listing, soft)
 
-    parts.append(f"semantic {q:.0%}×{w_query:.0%}")
-    parts.append(f"geo {geo:.0%}×{w_geo:.0%}")
-    parts.append(f"soft {soft_s:.0%}×{w_soft:.0%}")
+    parts.append(f"semantic {q:.0%}")
+    parts.append(f"geo {geo:.0%}")
+    parts.append(f"soft {soft_s:.0%}")
 
     lat = listing.get("latitude")
     lon = listing.get("longitude")
