@@ -65,15 +65,35 @@ features : list — ONLY from: balcony, elevator, parking, garage, pets_allowed,
            minergie_certified, fireplace, new_build
 
 Soft-only fields (not DB filters — used for ranking only):
-  furnished     : bool — prefer furnished listings (Möblierte Wohnung / möbliert)
-  garden        : bool — prefer listings with a private garden / Garten
-  min_bedrooms  : int  — minimum number of bedrooms (≥1); bedrooms ≈ rooms − 1 in Swiss notation
-  min_bathrooms : int  — minimum number of bathrooms (resolved via description)
-  rooftop       : bool — prefer rooftop terrace / Dachterrasse (Dachwohnung, Attika)
-  terrace       : bool — prefer a terrace (Terrassenwohnung), distinct from a balcony
-  cellar        : bool — prefer a cellar / storage room (Keller; resolved via description)
-  bathtub       : bool — prefer a bathtub (resolved via description)
-  view          : bool — prefer listings with a notable view (lake, mountains, city)
+
+  Physical / structural:
+  furnished        : bool — furnished / möbliert / meublé
+  garden           : bool — private garden / Garten / jardin
+  min_bedrooms     : int  — minimum bedrooms (≥1); bedrooms ≈ rooms − 1 in Swiss notation
+  min_bathrooms    : int  — minimum bathrooms (≥1; resolved via description)
+  rooftop          : bool — rooftop terrace / Dachterrasse (Dachwohnung, Attika)
+  terrace          : bool — terrace (not just a balcony) / Terrasse
+  cellar           : bool — cellar / storage room / Keller
+  bathtub          : bool — bathtub / Badewanne / baignoire
+  view             : bool — notable view (lake, mountains, city skyline)
+  not_ground_floor : bool — not on ground floor / kein Erdgeschoss
+
+  Interior / aesthetic:
+  bright      : bool — bright / lots of light / hell / viel Licht / große Fenster
+  modern      : bool — modern / recently renovated / neu renoviert / Neubau
+  good_layout : bool — good floor plan / guter Schnitt / gute Raumaufteilung
+
+  Neighbourhood / environment:
+  quiet            : bool — quiet location / ruhige Lage / ruhige Straße
+  near_lake        : bool — near a lake / in Seenähe / nahe am See
+  safe             : bool — safe / secure area / sicheres Quartier
+  good_schools     : bool — good schools nearby / gute Schulen
+  low_traffic      : bool — low traffic / wenig Verkehr / nicht an großer Straße
+  green_space      : bool — parks / greenery nearby / Grün in der Nähe
+  walkable_shopping: bool — shops within walking distance / Einkaufen zu Fuß
+  good_transport   : bool — good public transport / gute ÖV-Anbindung
+  family_friendly  : bool — family-friendly environment / familienfreundlich
+  playground_nearby: bool — playground nearby / Spielplatz in der Nähe
 
 ## Field-by-field rules
 
@@ -137,19 +157,40 @@ Explicit "with X" / "muss X haben" → hard.features
 "must have parking" → hard.features=["parking"]
 
 ### soft-only field rules
-"furnished" / "möbliert" / "meublé"                  → soft.furnished=true
-"garden" / "Garten" / "jardin" / "private garden"    → soft.garden=true
-"2 bedrooms" / "two bedrooms" / "2 Schlafzimmer"     → soft.min_bedrooms=2
-"at least 1 bathroom" / "2 Badezimmer"               → soft.min_bathrooms=1|2
-"rooftop" / "Dachterrasse" / "roof terrace" / "Attika" → soft.rooftop=true
-"terrace" / "Terrasse" / "terrasse" (NOT balcony)    → soft.terrace=true
-"cellar" / "Keller" / "storage room" / "cave"        → soft.cellar=true
-"bathtub" / "Badewanne" / "baignoire"                → soft.bathtub=true
-"view" / "Aussicht" / "vue" / "lake view" / "mountain view" → soft.view=true
+
+Physical / structural:
+"furnished" / "möbliert" / "meublé"                        → soft.furnished=true
+"garden" / "Garten" / "jardin"                             → soft.garden=true
+"2 bedrooms" / "2 Schlafzimmer" / "at least 2 bedrooms"   → soft.min_bedrooms=2
+"2 bathrooms" / "2 Badezimmer" / "at least 1 bathroom"    → soft.min_bathrooms=2|1
+"rooftop terrace" / "Dachterrasse" / "roof terrace"        → soft.rooftop=true
+"terrace" / "Terrasse" (not just a balcony)                → soft.terrace=true
+"cellar" / "Keller" / "storage room" / "cave"              → soft.cellar=true
+"bathtub" / "Badewanne" / "baignoire"                      → soft.bathtub=true
+"view" / "Aussicht" / "lake view" / "mountain view"        → soft.view=true
+"not ground floor" / "nicht im Erdgeschoss" / "not EG"     → soft.not_ground_floor=true
+
+Interior / aesthetic:
+"bright" / "lots of light" / "hell" / "viel Licht" / "große Fenster" / "light-filled" → soft.bright=true
+"modern" / "renovated" / "modern kitchen" / "neu renoviert" / "Neubau"               → soft.modern=true
+"good layout" / "guter Schnitt" / "well-designed" / "practical plan"                  → soft.good_layout=true
+
+Neighbourhood / environment:
+"quiet" / "ruhig" / "quiet street" / "ruhige Straße" / "ruhige Lage"                → soft.quiet=true
+"near the lake" / "in Seenähe" / "nahe am See"                                       → soft.near_lake=true
+"safe" / "sicher" / "secure" / "clean neighbourhood"                                  → soft.safe=true
+"good schools" / "gute Schulen" / "bonnes écoles"                                    → soft.good_schools=true
+"little traffic" / "wenig Verkehr" / "not on a major road" / "keine Durchgangsstraße"→ soft.low_traffic=true
+"green space" / "parks" / "Grün" / "Natur in der Nähe" / "greenery"                 → soft.green_space=true
+"shops on foot" / "Einkaufen zu Fuß" / "walking distance to shops"                   → soft.walkable_shopping=true
+"good transport" / "gute ÖV-Anbindung" / "good tram" / "nahe Haltestelle"           → soft.good_transport=true
+"family-friendly" / "familienfreundlich" / "kinderfreundlich"                         → soft.family_friendly=true
+"playground" / "Spielplatz" / "aire de jeux"                                          → soft.playground_nearby=true
 
 ### guidance
-If a soft preference has no matching field, omit it rather than force-fitting it.
+Set ALL soft flags the user clearly signals — multiple flags are expected and correct.
 Do NOT convert geolocation signals into latitude/longitude — leave those to the geocoding pipeline.
+If a preference has no matching field, omit it rather than force-fitting.
 
 ## German / French mapping
 Wohnung→Wohnung  Haus→Haus  mieten→RENT  kaufen→SALE  Zimmer(count)→rooms
@@ -214,15 +255,31 @@ FEW_SHOT_MESSAGES = [
     # French query; area hard; balcony hard; elevator soft
     HumanMessage(content='Appartement 3 pièces à Genève, loyer max 2500 CHF, avec balcon, min 70m², ascenseur si possible'),
     AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":3,"max_rooms":3,"max_price":2500,"min_area":70,"city":["Geneva","Genève"],"features":["balcony"]},"soft":{"features":["elevator"]}}'),
-    # furnished + garden + rooftop soft preferences
+    # quiet + bright + not ground floor — interior/environment soft flags
+    HumanMessage(content='Looking for something in Zurich that feels quiet and bright, ideally not on the ground floor'),
+    AIMessage(content='{"hard":{"offer_type":"RENT","city":["Zurich","Zürich"]},"soft":{"quiet":true,"bright":true,"not_ground_floor":true}}'),
+
+    # family: schools + green + playground + safe + low traffic
+    HumanMessage(content='Family with one child looking in Zug or Baar, 3.5 rooms, budget up to 3600 CHF, good schools, little traffic, some greenery, playground nearby'),
+    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":3.5,"max_rooms":3.5,"max_price":3600,"city":["Zug","Baar"]},"soft":{"good_schools":true,"low_traffic":true,"green_space":true,"playground_nearby":true,"safe":true,"family_friendly":true}}'),
+
+    # furnished + garden + rooftop
     HumanMessage(content='Furnished apartment in Zurich under 2800 CHF, ideally with a garden or rooftop terrace'),
     AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"max_price":2800,"city":["Zurich","Zürich"]},"soft":{"furnished":true,"garden":true,"rooftop":true}}'),
 
-    # bedrooms + bathrooms + view
-    HumanMessage(content='3-room flat in Bern, ideally 2 bedrooms, 2 bathrooms, and a nice mountain view'),
-    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":3,"max_rooms":3,"city":["Bern"]},"soft":{"min_bedrooms":2,"min_bathrooms":2,"view":true}}'),
+    # bedrooms + bathrooms + view + not ground floor
+    HumanMessage(content='3-room flat in Bern, ideally 2 bedrooms, 2 bathrooms, mountain view, not ground floor'),
+    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":3,"max_rooms":3,"city":["Bern"]},"soft":{"min_bedrooms":2,"min_bathrooms":2,"view":true,"not_ground_floor":true}}'),
 
-    # terrace + cellar + bathtub
-    HumanMessage(content='4-room apartment in Basel, with terrace if possible, bathtub and cellar would be great'),
-    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":4,"max_rooms":4,"city":["Basel","Bâle"]},"soft":{"terrace":true,"bathtub":true,"cellar":true}}'),
+    # terrace + cellar + bathtub + modern
+    HumanMessage(content='4-room apartment in Basel, modern kitchen, terrace if possible, bathtub and cellar would be great'),
+    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":4,"max_rooms":4,"city":["Basel","Bâle"]},"soft":{"modern":true,"terrace":true,"bathtub":true,"cellar":true}}'),
+
+    # walkable shopping + good transport + near lake + safe
+    HumanMessage(content='Apartment near Zurich lake, safe area, good tram connection, shops walkable, around 3 rooms'),
+    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":3,"max_rooms":3,"city":["Zurich","Zürich"]},"soft":{"near_lake":true,"safe":true,"good_transport":true,"walkable_shopping":true}}'),
+
+    # good layout + bright + good transport (commuter query)
+    HumanMessage(content='2.5 to 3 rooms in Zurich, good layout, bright, max 25 min commute to HB, at least 65 m², balcony'),
+    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":2.5,"max_rooms":3,"min_area":65,"city":["Zurich","Zürich"],"features":["balcony"]},"soft":{"good_layout":true,"bright":true,"good_transport":true,"not_ground_floor":true}}'),
 ]

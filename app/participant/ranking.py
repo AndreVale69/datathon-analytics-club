@@ -5,6 +5,7 @@ from typing import Any
 
 from app.core.hard_filters import _distance_km
 from app.models.schemas import HardFilters, ListingData, RankedListingResult
+from app.participant.description_extractor import ExtractedFeatures
 
 
 _W_GEO             = 0.60  # fixed geo share when geo is active
@@ -23,14 +24,16 @@ def rank_listings(
     soft: HardFilters,
     hard: HardFilters | None = None,
     query_similarities: dict[str, float] | None = None,
+    extracted_features: dict[str, ExtractedFeatures] | None = None,
 ) -> list[RankedListingResult]:
     sims = query_similarities or {}
+    feats = extracted_features or {}
     hard = hard or HardFilters()
     results = [
         RankedListingResult(
             listing_id=str(c["listing_id"]),
-            score=_score(c, soft, hard, sims.get(str(c["listing_id"]), 0.0)),
-            reason=_reason(c, soft, hard, sims.get(str(c["listing_id"]), 0.0)),
+            score=_score(c, soft, hard, sims.get(str(c["listing_id"]), 0.0), feats.get(str(c["listing_id"]))),
+            reason=_reason(c, soft, hard, sims.get(str(c["listing_id"]), 0.0), feats.get(str(c["listing_id"]))),
             listing=_to_listing_data(c),
         )
         for c in candidates
@@ -65,11 +68,12 @@ def _weights(soft: HardFilters, hard: HardFilters) -> tuple[float, float, float]
     return w_query, w_geo, w_soft
 
 
-def _score(listing: dict[str, Any], soft: HardFilters, hard: HardFilters, query_sim: float = 0.0) -> float:
+def _score(listing: dict[str, Any], soft: HardFilters, hard: HardFilters,
+           query_sim: float = 0.0, extracted: ExtractedFeatures | None = None) -> float:
     w_query, w_geo, w_soft = _weights(soft, hard)
-    q     = max(0.0, min(1.0, query_sim))
-    geo   = _geo_score(listing, soft, hard)
-    soft_s = _soft_score(listing, soft)
+    q      = max(0.0, min(1.0, query_sim))
+    geo    = _geo_score(listing, soft, hard)
+    soft_s = _soft_score(listing, soft, extracted)
     return round(w_query * q + w_geo * geo + w_soft * soft_s, 4)
 
 
@@ -94,85 +98,140 @@ _ROOFTOP_CATEGORIES = {"Dachwohnung", "Attika"}
 _TERRACE_CATEGORIES = {"Terrassenwohnung", "Maisonette"}
 
 
+# Maps each SoftFilters boolean field to the corresponding ExtractedFeatures field.
+# Used by both _count_soft_constraints and _soft_score.
+_BOOL_SOFT_TO_EXTRACTED: list[tuple[str, str]] = [
+    # physical / structural
+    ("furnished",        "furnished"),
+    ("garden",           "has_garden"),
+    ("rooftop",          "has_rooftop"),
+    ("terrace",          "has_terrace"),
+    ("cellar",           "has_cellar"),
+    ("bathtub",          "has_bathtub"),
+    ("view",             "has_view"),
+    ("not_ground_floor", "not_ground_floor"),
+    # interior / aesthetic
+    ("bright",           "is_bright"),
+    ("modern",           "is_modern"),
+    ("good_layout",      "good_layout"),
+    # neighbourhood / environment
+    ("quiet",            "is_quiet"),
+    ("near_lake",        "near_lake"),
+    ("safe",             "safe_area"),
+    ("good_schools",     "good_schools"),
+    ("low_traffic",      "low_traffic"),
+    ("green_space",      "green_space"),
+    ("walkable_shopping","walkable_shopping"),
+    ("good_transport",   "good_transport"),
+    ("family_friendly",  "family_friendly"),
+    ("playground_nearby","playground_nearby"),
+]
+
+
 def _count_soft_constraints(soft: HardFilters) -> int:
-    """Count scoreable soft criteria (mirrors _soft_score — only what we can verify)."""
+    """Count all expressed soft criteria (DB-verifiable + description-only)."""
     n = 0
     if soft.features:                           n += 1
     if soft.max_price:                          n += 1
     if soft.min_rooms:                          n += 1
     if soft.min_area:                           n += 1
     if soft.city:                               n += 1
-    if getattr(soft, "furnished", None):        n += 1
-    if getattr(soft, "garden", None):           n += 1
     if getattr(soft, "min_bedrooms", None):     n += 1
-    if getattr(soft, "rooftop", None):          n += 1
-    if getattr(soft, "terrace", None):          n += 1
+    if getattr(soft, "min_bathrooms", None):    n += 1
+    for soft_field, _ in _BOOL_SOFT_TO_EXTRACTED:
+        if getattr(soft, soft_field, None):     n += 1
     return n
 
 
-def _soft_score(listing: dict[str, Any], soft: HardFilters) -> float:
-    """Average of per-criterion [0,1] scores for every verifiable soft preference."""
+def _soft_score(listing: dict[str, Any], soft: HardFilters,
+                extracted: ExtractedFeatures | None = None) -> float:
+    """Average of per-criterion [0,1] scores for every expressed soft preference."""
     scores: list[float] = []
-    cat = listing.get("object_category") or ""
+    cat   = listing.get("object_category") or ""
+    rooms = listing.get("rooms")
 
-    # Requested features
+    # ── DB-verifiable ─────────────────────────────────────────────────────────
     if soft.features:
         matched = sum(1 for f in soft.features if listing.get(f"feature_{f}") == 1)
         scores.append(matched / len(soft.features))
 
-    # Price fit
     price = listing.get("price")
     if soft.max_price and price:
         scores.append(max(0.0, min(1.0, 1.0 - price / soft.max_price)))
 
-    # Rooms fit
-    rooms = listing.get("rooms")
     if soft.min_rooms and rooms:
         scores.append(max(0.0, 1.0 - abs(rooms - soft.min_rooms) / soft.min_rooms))
 
-    # Area fit
     area = listing.get("area")
     if soft.min_area and area:
         scores.append(max(0.0, 1.0 - abs(area - soft.min_area) / soft.min_area))
 
-    # City match
     if soft.city:
         city = (listing.get("city") or "").lower()
         scores.append(1.0 if any(city == c.lower() for c in soft.city) else 0.0)
 
-    # Furnished
+    # ── Category-proxied (improved by extracted when available) ───────────────
     if getattr(soft, "furnished", None):
-        scores.append(1.0 if cat == "Möblierte Wohnung" else 0.0)
+        if extracted and extracted.furnished is not None:
+            scores.append(1.0 if extracted.furnished else 0.0)
+        else:
+            scores.append(1.0 if cat == "Möblierte Wohnung" else 0.0)
 
-    # Garden — proxy: house-type category
     if getattr(soft, "garden", None):
-        scores.append(1.0 if cat in _HOUSE_CATEGORIES else 0.0)
+        if extracted and extracted.has_garden is not None:
+            scores.append(1.0 if extracted.has_garden else 0.0)
+        else:
+            scores.append(1.0 if cat in _HOUSE_CATEGORIES else 0.0)
 
-    # Min bedrooms — approximated: bedrooms ≈ rooms − 1 (Swiss notation)
-    min_bed = getattr(soft, "min_bedrooms", None)
-    if min_bed and rooms:
-        estimated_bedrooms = max(0.0, rooms - 1)
-        scores.append(1.0 if estimated_bedrooms >= min_bed else
-                      max(0.0, estimated_bedrooms / min_bed))
-
-    # Rooftop access — Dachwohnung / Attika
     if getattr(soft, "rooftop", None):
-        scores.append(1.0 if cat in _ROOFTOP_CATEGORIES else 0.0)
+        if extracted and extracted.has_rooftop is not None:
+            scores.append(1.0 if extracted.has_rooftop else 0.0)
+        else:
+            scores.append(1.0 if cat in _ROOFTOP_CATEGORIES else 0.0)
 
-    # Terrace — Terrassenwohnung / Maisonette
     if getattr(soft, "terrace", None):
-        scores.append(1.0 if cat in _TERRACE_CATEGORIES else 0.0)
+        if extracted and extracted.has_terrace is not None:
+            scores.append(1.0 if extracted.has_terrace else 0.0)
+        else:
+            scores.append(1.0 if cat in _TERRACE_CATEGORIES else 0.0)
+
+    # ── Numeric description-based ─────────────────────────────────────────────
+    min_bed = getattr(soft, "min_bedrooms", None)
+    if min_bed:
+        if extracted and extracted.bedrooms is not None:
+            scores.append(1.0 if extracted.bedrooms >= min_bed else
+                          max(0.0, extracted.bedrooms / min_bed))
+        elif rooms:
+            estimated = max(0.0, rooms - 1)
+            scores.append(1.0 if estimated >= min_bed else max(0.0, estimated / min_bed))
+
+    min_bath = getattr(soft, "min_bathrooms", None)
+    if min_bath:
+        if extracted and extracted.bathrooms is not None:
+            scores.append(1.0 if extracted.bathrooms >= min_bath else
+                          max(0.0, extracted.bathrooms / min_bath))
+        else:
+            scores.append(0.0)
+
+    # ── Pure description-based booleans (all via _BOOL_SOFT_TO_EXTRACTED) ─────
+    for soft_field, ext_field in _BOOL_SOFT_TO_EXTRACTED:
+        if soft_field in ("furnished", "garden", "rooftop", "terrace"):
+            continue  # already handled with category fallback above
+        if getattr(soft, soft_field, None):
+            ext_val = getattr(extracted, ext_field, None) if extracted else None
+            scores.append(1.0 if ext_val else 0.0)
 
     if not scores:
         return 0.0
     return sum(scores) / len(scores)
 
 
-def _reason(listing: dict[str, Any], soft: HardFilters, hard: HardFilters, query_sim: float = 0.0) -> str:
+def _reason(listing: dict[str, Any], soft: HardFilters, hard: HardFilters,
+            query_sim: float = 0.0, extracted: ExtractedFeatures | None = None) -> str:
     w_query, w_geo, w_soft = _weights(soft, hard)
     q      = max(0.0, min(1.0, query_sim))
     geo    = _geo_score(listing, soft, hard)
-    soft_s = _soft_score(listing, soft)
+    soft_s = _soft_score(listing, soft, extracted)
 
     parts: list[str] = []
 
@@ -249,10 +308,29 @@ def _reason(listing: dict[str, Any], soft: HardFilters, hard: HardFilters, query
         parts.append(f"~{est} estimated bedroom(s) (you asked for {min_bed}+)")
 
     if getattr(soft, "rooftop", None):
-        parts.append("Rooftop / Dachterrasse access" if cat in _ROOFTOP_CATEGORIES else "No rooftop access indicated")
+        has = (extracted.has_rooftop if extracted and extracted.has_rooftop is not None
+               else cat in _ROOFTOP_CATEGORIES)
+        parts.append("Rooftop / Dachterrasse access confirmed" if has else "No rooftop access indicated")
 
     if getattr(soft, "terrace", None):
-        parts.append("Has terrace" if cat in _TERRACE_CATEGORIES else "No dedicated terrace indicated")
+        has = (extracted.has_terrace if extracted and extracted.has_terrace is not None
+               else cat in _TERRACE_CATEGORIES)
+        parts.append("Has terrace" if has else "No dedicated terrace indicated")
+
+    # ── Description-extracted details ─────────────────────────────────────────
+    if extracted:
+        min_bath = getattr(soft, "min_bathrooms", None)
+        if min_bath and extracted.bathrooms is not None:
+            parts.append(f"{extracted.bathrooms} bathroom(s) found (you asked for {min_bath}+)")
+
+        if getattr(soft, "cellar", None) and extracted.has_cellar is not None:
+            parts.append("Cellar/storage confirmed" if extracted.has_cellar else "No cellar mentioned")
+
+        if getattr(soft, "bathtub", None) and extracted.has_bathtub is not None:
+            parts.append("Bathtub confirmed" if extracted.has_bathtub else "No bathtub mentioned")
+
+        if getattr(soft, "view", None) and extracted.has_view is not None:
+            parts.append("Notable view confirmed" if extracted.has_view else "No notable view mentioned")
 
     # ── Always-on facts ───────────────────────────────────────────────────────
     if price and area:

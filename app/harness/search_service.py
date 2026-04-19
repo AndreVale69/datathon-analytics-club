@@ -9,6 +9,7 @@ from app.participant.constraint_extractor import extract_constraints
 from app.participant.ranking import rank_listings
 from app.participant.soft_filtering import filter_soft_facts
 from app.participant.description_analysis import compute_query_similarities
+from app.participant.description_extractor import extract_features_from_descriptions
 
 
 def query_from_text(
@@ -26,9 +27,10 @@ def query_from_text(
     candidates = search_listings(db_path, to_hard_filter_params(constraints.hard))
 
     query_similarities = compute_query_similarities(query, candidates)
+    extracted_features = extract_features_from_descriptions(candidates, query_similarities)
 
     return ListingsResponse(
-        listings=rank_listings(candidates, constraints.soft, constraints.hard, query_similarities),
+        listings=rank_listings(candidates, constraints.soft, constraints.hard, query_similarities, extracted_features),
         meta={
             "hard": constraints.hard.model_dump(exclude_none=True, exclude_defaults=True),
             "soft": constraints.soft.model_dump(exclude_none=True, exclude_defaults=True),

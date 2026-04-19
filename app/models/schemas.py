@@ -137,24 +137,32 @@ class QueryConstraints(BaseModel):
     # not (necessarily) direct DB filters but are useful ranking hints for
     # the pipeline / LLM output.
     class SoftFilters(HardFilters):
-        # Prefer furnished listings (Möblierte Wohnung).
-        furnished: bool | None = None
-        # Prefer listings with a private garden.
-        garden: bool | None = None
-        # Minimum number of bedrooms (approximated: bedrooms ≈ rooms − 1).
-        min_bedrooms: int | None = Field(default=None, ge=1)
-        # Minimum number of bathrooms (resolved via description / semantic similarity).
-        min_bathrooms: int | None = Field(default=None, ge=1)
-        # Prefer rooftop access / Dachterrasse (Dachwohnung, Attika).
-        rooftop: bool | None = None
-        # Prefer a terrace (Terrassenwohnung, not just a balcony).
-        terrace: bool | None = None
-        # Prefer a cellar / storage room (resolved via description).
-        cellar: bool | None = None
-        # Prefer a bathtub (resolved via description).
-        bathtub: bool | None = None
-        # Prefer listings with a notable view (lake, mountains, city skyline).
-        view: bool | None = None
+        # ── Physical / structural ────────────────────────────────────────────
+        furnished: bool | None = None       # furnished / möbliert / meublé
+        garden: bool | None = None          # private garden / Garten
+        min_bedrooms: int | None = Field(default=None, ge=1)   # min bedrooms
+        min_bathrooms: int | None = Field(default=None, ge=1)  # min bathrooms
+        rooftop: bool | None = None         # rooftop terrace / Dachterrasse
+        terrace: bool | None = None         # terrace (not just balcony)
+        cellar: bool | None = None          # cellar / Keller / storage room
+        bathtub: bool | None = None         # bathtub / Badewanne
+        view: bool | None = None            # notable view (lake, mountains, city)
+        not_ground_floor: bool | None = None  # not on ground floor / kein Erdgeschoss
+        # ── Interior / aesthetic ─────────────────────────────────────────────
+        bright: bool | None = None          # bright / lots of light / hell / viel Licht
+        modern: bool | None = None          # modern / renovated / neu renoviert
+        good_layout: bool | None = None     # good floor plan / guter Schnitt
+        # ── Neighbourhood / environment ──────────────────────────────────────
+        quiet: bool | None = None           # quiet environment / ruhige Lage
+        near_lake: bool | None = None       # near a lake / in Seenähe
+        safe: bool | None = None            # safe area / sichere Gegend
+        good_schools: bool | None = None    # good schools nearby / gute Schulen
+        low_traffic: bool | None = None     # low traffic / wenig Verkehr
+        green_space: bool | None = None     # parks / greenery nearby / Grün
+        walkable_shopping: bool | None = None  # shops within walking distance
+        good_transport: bool | None = None  # good public transport / gute ÖV-Anbindung
+        family_friendly: bool | None = None # family-friendly environment
+        playground_nearby: bool | None = None  # playground nearby / Spielplatz
 
     soft: SoftFilters = Field(default_factory=SoftFilters)
 
