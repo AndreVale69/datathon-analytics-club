@@ -11,6 +11,40 @@ The repo contains:
 - a Vite + React widget in `apps_sdk/web/`
 - tests for the API, bootstrap flow, and MCP metadata
 
+## Table Of Contents
+
+- [AWS Side Challenge](#aws-side-challenge)
+- [What The Challenge Asks For](#what-the-challenge-asks-for)
+- [Current Repo Status](#current-repo-status)
+- [Local Secrets And Env Files](#local-secrets-and-env-files)
+- [Hackathon-Available Bedrock Models](#hackathon-available-bedrock-models)
+- [GitHub Secrets](#github-secrets)
+- [Requirements](#requirements)
+- [Quick Start](#quick-start)
+
+## AWS Side Challenge
+
+This project is also submitted for the AWS side challenge.
+
+AWS usage in this project:
+
+- Amazon Bedrock for LLM-based query understanding, including extraction of hard constraints and soft preferences from natural-language apartment searches.
+- Amazon S3 for apartment image storage and retrieval in the application pipeline.
+- Separate AWS credential paths for S3 image access and Bedrock model access, so the image pipeline and the LLM pipeline can be configured independently.
+
+Current Bedrock setup used in this repo:
+
+- Provider: `AI_PROVIDER=bedrock`
+- Working model for this workshop account: `us.anthropic.claude-sonnet-4-5-20250929-v1:0`
+
+Hackathon model reference:
+
+- See [Hackathon-available Bedrock models](#hackathon-available-bedrock-models) below for the full list of models allowed in this event.
+
+Security note:
+
+- Do not create S3 buckets with unrestricted public access. Restrict access using S3 Block Public Access and/or a restrictive bucket policy.
+
 ## What The Challenge Asks For
 
 Based on the challenge brief and portal material, the expected prototype should:
@@ -112,34 +146,7 @@ Provider notes:
 - `AI_PROVIDER=openai`: uses `OPENAI_API_KEY` and `OPENAI_MODEL`
 - `AI_PROVIDER=bedrock`: uses `BEDROCK_MODEL_ID` plus either dedicated `BEDROCK_AWS_*` credentials or the standard AWS credential chain
 - `BEDROCK_AWS_REGION` is optional; if empty, the app falls back to `AWS_REGION` or `AWS_DEFAULT_REGION`
-
-Hackathon-available Bedrock models:
-
-- All Amazon models
-  Recommended text models for this repo:
-  `us.amazon.nova-micro-v1:0`, `us.amazon.nova-lite-v1:0`
-- Anthropic Claude Sonnet 4.5
-  In-Region model ID: `anthropic.claude-sonnet-4-5-20250929-v1:0`
-  US inference profile: `us.anthropic.claude-sonnet-4-5-20250929-v1:0`
-  EU inference profile: `eu.anthropic.claude-sonnet-4-5-20250929-v1:0`
-- Anthropic Claude Opus 4.5
-  In-Region model ID: `anthropic.claude-opus-4-5-20251101-v1:0`
-  US inference profile: `us.anthropic.claude-opus-4-5-20251101-v1:0`
-  EU inference profile: `eu.anthropic.claude-opus-4-5-20251101-v1:0`
-- Meta Llama 4 Maverick 17B Instruct
-  In-Region model ID: `meta.llama4-maverick-17b-instruct-v1:0`
-  US inference profile: `us.meta.llama4-maverick-17b-instruct-v1:0`
-- Mistral Pixtral Large (25.02)
-  In-Region model ID: `mistral.pixtral-large-2502-v1:0`
-  US inference profile: `us.mistral.pixtral-large-2502-v1:0`
-  EU inference profile: `eu.mistral.pixtral-large-2502-v1:0`
-- Stable Diffusion 3.5 Large
-  Model ID: `stability.sd3-5-large-v1:0`
-
-Notes:
-
-- Some Bedrock models require an inference profile instead of direct on-demand invocation. In this hackathon setup, `us.anthropic.claude-sonnet-4-5-20250929-v1:0` worked, while the plain Sonnet 4.5 model ID did not.
-- Actual runtime access still depends on the permissions attached to the workshop AWS role. A model can be listed as available for the hackathon and still be blocked for a specific participant role by IAM policy.
+- See [Hackathon-Available Bedrock Models](#hackathon-available-bedrock-models) for the full list of models allowed in this event and the Bedrock IDs used in this repo.
 
 ### Switch Between OpenAI And AWS Bedrock
 
@@ -191,6 +198,36 @@ In that setup:
 
 - S3 image access uses `AWS_*`
 - Bedrock uses `BEDROCK_AWS_*`
+
+## Hackathon-Available Bedrock Models
+
+The organizers stated that the following models are available for the hackathon:
+
+- All Amazon models
+  Recommended text models for this repo:
+  `us.amazon.nova-micro-v1:0`, `us.amazon.nova-lite-v1:0`
+- Anthropic Claude Sonnet 4.5
+  In-Region model ID: `anthropic.claude-sonnet-4-5-20250929-v1:0`
+  US inference profile: `us.anthropic.claude-sonnet-4-5-20250929-v1:0`
+  EU inference profile: `eu.anthropic.claude-sonnet-4-5-20250929-v1:0`
+- Anthropic Claude Opus 4.5
+  In-Region model ID: `anthropic.claude-opus-4-5-20251101-v1:0`
+  US inference profile: `us.anthropic.claude-opus-4-5-20251101-v1:0`
+  EU inference profile: `eu.anthropic.claude-opus-4-5-20251101-v1:0`
+- Meta Llama 4 Maverick 17B Instruct
+  In-Region model ID: `meta.llama4-maverick-17b-instruct-v1:0`
+  US inference profile: `us.meta.llama4-maverick-17b-instruct-v1:0`
+- Mistral Pixtral Large (25.02)
+  In-Region model ID: `mistral.pixtral-large-2502-v1:0`
+  US inference profile: `us.mistral.pixtral-large-2502-v1:0`
+  EU inference profile: `eu.mistral.pixtral-large-2502-v1:0`
+- Stable Diffusion 3.5 Large
+  Model ID: `stability.sd3-5-large-v1:0`
+
+Notes:
+
+- Some Bedrock models require an inference profile instead of direct on-demand invocation. In this hackathon setup, `us.anthropic.claude-sonnet-4-5-20250929-v1:0` worked, while the plain Sonnet 4.5 model ID did not.
+- Actual runtime access still depends on the permissions attached to the workshop AWS role. A model can be listed as available for the hackathon and still be blocked for a specific participant role by IAM policy.
 
 Leave `MCP_ALLOWED_HOSTS` and `MCP_ALLOWED_ORIGINS` empty for normal local development. Only set them when you have a real public host and want stricter request validation.
 
