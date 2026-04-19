@@ -3,11 +3,14 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.config import get_settings
-from app.harness.search_service import query_from_filters, query_from_text
+from app.harness.search_service import query_from_filters, query_from_text, resolve_listing_images
 from app.models.schemas import (
     HealthResponse,
     ListingExplanationRequest,
     ListingExplanationResponse,
+    ListingImagesPayload,
+    ListingImagesRequest,
+    ListingImagesResponse,
     ListingsQueryRequest,
     ListingsResponse,
     ListingsSearchRequest,
@@ -39,6 +42,20 @@ def listings_search(request: ListingsSearchRequest) -> ListingsResponse:
     return query_from_filters(
         db_path=settings.db_path,
         hard_facts=request.hard_filters,
+    )
+
+
+@router.post("/listings/images", response_model=ListingImagesResponse)
+def listing_images(request: ListingImagesRequest) -> ListingImagesResponse:
+    settings = get_settings()
+    return ListingImagesResponse(
+        listings=[
+            ListingImagesPayload(**item)
+            for item in resolve_listing_images(
+                db_path=settings.db_path,
+                listing_ids=request.listing_ids,
+            )
+        ]
     )
 
 

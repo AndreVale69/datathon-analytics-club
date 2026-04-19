@@ -58,7 +58,7 @@ def query_from_filters(
     hard = hard_facts or HardFilters()
     soft = QueryConstraints.SoftFilters()
     candidates = search_listings(db_path, to_hard_filter_params(hard))
-    _hydrate_candidate_image_urls(candidates, db_path=db_path)
+    _clear_candidate_image_urls(candidates)
     candidates = filter_soft_facts(candidates, soft)
     return ListingsResponse(
         listings=rank_listings(candidates, soft, hard),

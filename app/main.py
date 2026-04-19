@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,10 +26,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# DEVELOPMENT ONLY -- see README security warning
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv("API_ALLOWED_ORIGINS", "*").split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins or ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )

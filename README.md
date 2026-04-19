@@ -18,6 +18,7 @@ The repo contains:
 - [What The Challenge Asks For](#what-the-challenge-asks-for)
 - [Current Repo Status](#current-repo-status)
 - [Local Secrets And Env Files](#local-secrets-and-env-files)
+- [Public HTTPS Demo With Tailscale](#public-https-demo-with-tailscale)
 - [Hackathon-Available Bedrock Models](#hackathon-available-bedrock-models)
 - [GitHub Secrets](#github-secrets)
 - [Requirements](#requirements)
@@ -258,6 +259,52 @@ Recommended hybrid setup for this repo:
 - `DESCRIPTION_FEATURES_PROVIDER=bedrock`
 - `EXPLANATION_PROVIDER=bedrock`
 - switch an individual extraction stage to `bedrock` only if it performs better in your evaluation queries
+
+## Public HTTPS Demo With Tailscale
+
+If you want a public HTTPS URL without deploying to a cloud host, this repo can be exposed from any computer that has:
+
+- Docker and Docker Compose
+- Tailscale installed and logged in
+- the challenge dataset present in `raw_data/`
+- the needed secrets in `.env.local` or exported in the shell
+
+The portable flow is:
+
+```bash
+chmod +x scripts/start_public_demo.sh scripts/stop_public_demo.sh
+./scripts/start_public_demo.sh .env.local
+```
+
+What this does:
+
+- starts `api` and `web` with Docker Compose
+- serves the React UI on local port `8080`
+- proxies `/listings`, `/listings/images`, `/health`, and `/raw-data-images/*` from that same origin to the FastAPI API
+- opens a Tailscale Funnel on `8080`
+
+Then inspect the public URL with:
+
+```bash
+tailscale funnel status
+```
+
+You will get one HTTPS base URL that serves both:
+
+- UI: `https://<funnel-url>/`
+- API: `https://<funnel-url>/listings`
+
+To stop it:
+
+```bash
+./scripts/stop_public_demo.sh
+```
+
+Notes:
+
+- the public URL is tied to the machine currently running Tailscale Funnel, so moving to another computer means starting the same script there
+- the exact hostname may change across machines, but the startup flow stays the same
+- this is suitable for demo/submission use, not a production hosting setup
 
 ## Hackathon-Available Bedrock Models
 
