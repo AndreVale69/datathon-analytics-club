@@ -34,8 +34,8 @@ AWS usage in this project:
 
 Current Bedrock setup used in this repo:
 
-- Provider: `AI_PROVIDER=bedrock`
-- Working model for this workshop account: `us.anthropic.claude-sonnet-4-5-20250929-v1:0`
+- Working Bedrock model for this workshop account: `us.anthropic.claude-sonnet-4-5-20250929-v1:0`
+- The app now chooses providers and models per extraction stage through env vars instead of one global provider toggle.
 
 Hackathon model reference:
 
@@ -88,10 +88,19 @@ Files:
 
 Important variables:
 
-- `AI_PROVIDER`: `openai` or `bedrock` for query understanding
 - `OPENAI_API_KEY`
-- `OPENAI_MODEL`
-- `BEDROCK_MODEL_ID`
+- `HARD_CONSTRAINTS_PROVIDER`
+- `HARD_CONSTRAINTS_OPENAI_MODEL`
+- `HARD_CONSTRAINTS_BEDROCK_MODEL_ID`
+- `SOFT_PREFERENCES_PROVIDER`
+- `SOFT_PREFERENCES_OPENAI_MODEL`
+- `SOFT_PREFERENCES_BEDROCK_MODEL_ID`
+- `GEOLOCATION_PROVIDER`
+- `GEOLOCATION_OPENAI_MODEL`
+- `GEOLOCATION_BEDROCK_MODEL_ID`
+- `EXPLANATION_PROVIDER`
+- `EXPLANATION_OPENAI_MODEL`
+- `EXPLANATION_BEDROCK_MODEL_ID`
 - `BEDROCK_AWS_REGION`
 - `BEDROCK_AWS_ACCESS_KEY_ID`
 - `BEDROCK_AWS_SECRET_ACCESS_KEY`
@@ -116,11 +125,24 @@ cp .env.example .env.local
 Then edit `.env.local` and set the values you want to use locally:
 
 ```dotenv
-AI_PROVIDER=openai
 OPENAI_API_KEY=
-OPENAI_MODEL=gpt-4o-mini
 
-BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
+HARD_CONSTRAINTS_PROVIDER=openai
+HARD_CONSTRAINTS_OPENAI_MODEL=gpt-5-mini
+HARD_CONSTRAINTS_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
+
+SOFT_PREFERENCES_PROVIDER=openai
+SOFT_PREFERENCES_OPENAI_MODEL=gpt-5-mini
+SOFT_PREFERENCES_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
+
+GEOLOCATION_PROVIDER=openai
+GEOLOCATION_OPENAI_MODEL=gpt-5-mini
+GEOLOCATION_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
+
+EXPLANATION_PROVIDER=bedrock
+EXPLANATION_OPENAI_MODEL=gpt-5-mini
+EXPLANATION_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
+
 BEDROCK_AWS_REGION=
 BEDROCK_AWS_ACCESS_KEY_ID=
 BEDROCK_AWS_SECRET_ACCESS_KEY=
@@ -141,28 +163,41 @@ MCP_ALLOWED_HOSTS=
 MCP_ALLOWED_ORIGINS=
 ```
 
-Provider notes:
+Stage defaults:
 
-- `AI_PROVIDER=openai`: uses `OPENAI_API_KEY` and `OPENAI_MODEL`
-- `AI_PROVIDER=bedrock`: uses `BEDROCK_MODEL_ID` plus either dedicated `BEDROCK_AWS_*` credentials or the standard AWS credential chain
+- Hard constraints: `openai` with `gpt-5-mini`
+- Soft preferences: `openai` with `gpt-5-mini`
+- Geolocation intent: `openai` with `gpt-5-mini`
+- Explanation generation: `bedrock` with `us.anthropic.claude-sonnet-4-5-20250929-v1:0`
+- For any stage set to `bedrock`, the stage uses its `*_BEDROCK_MODEL_ID` together with `BEDROCK_AWS_*` credentials or the standard AWS credential chain
 - `BEDROCK_AWS_REGION` is optional; if empty, the app falls back to `AWS_REGION` or `AWS_DEFAULT_REGION`
 - See [Hackathon-Available Bedrock Models](#hackathon-available-bedrock-models) for the full list of models allowed in this event and the Bedrock IDs used in this repo.
 
-### Switch Between OpenAI And AWS Bedrock
+### Choose Providers And Models Per Stage
 
-To use OpenAI locally:
+Default extraction setup recommended for ranking quality:
 
 ```dotenv
-AI_PROVIDER=openai
 OPENAI_API_KEY=your_openai_key
-OPENAI_MODEL=gpt-4o-mini
+
+HARD_CONSTRAINTS_PROVIDER=openai
+HARD_CONSTRAINTS_OPENAI_MODEL=gpt-5-mini
+
+SOFT_PREFERENCES_PROVIDER=openai
+SOFT_PREFERENCES_OPENAI_MODEL=gpt-5-mini
+
+GEOLOCATION_PROVIDER=openai
+GEOLOCATION_OPENAI_MODEL=gpt-5-mini
+
+EXPLANATION_PROVIDER=bedrock
+EXPLANATION_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
 ```
 
-To switch to AWS Bedrock:
+If you want to use Bedrock for one specific stage, change only that stage:
 
 ```dotenv
-AI_PROVIDER=bedrock
-BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
+HARD_CONSTRAINTS_PROVIDER=bedrock
+HARD_CONSTRAINTS_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
 BEDROCK_AWS_REGION=us-west-2
 
 AWS_ACCESS_KEY_ID=your_aws_access_key_id
@@ -172,22 +207,23 @@ AWS_DEFAULT_REGION=us-west-2
 
 Notes:
 
-- You only need one provider active at a time.
-- When `AI_PROVIDER=bedrock`, the app ignores `OPENAI_API_KEY`.
-- When `AI_PROVIDER=openai`, the app ignores the Bedrock model setting.
-- If you are inside the AWS workshop environment, credentials may already be injected into the shell or attached role, so you might only need `AI_PROVIDER=bedrock` and `BEDROCK_MODEL_ID`.
+- Each stage is configured independently.
+- When a stage uses `openai`, that stage ignores its Bedrock model ID.
+- When a stage uses `bedrock`, that stage ignores its OpenAI model setting.
+- If you are inside the AWS workshop environment, credentials may already be injected into the shell or attached role, so you might only need to set the stage provider and its Bedrock model ID.
+- The frontend `Explain me why` action calls the explanation stage only on demand, so you do not pay an explanation-model call for every search result.
 
 If you need one AWS credential set for S3 images and a different one for Bedrock, keep the image credentials in the standard AWS variables and put the Bedrock credentials in the dedicated Bedrock variables:
 
 ```dotenv
-AI_PROVIDER=bedrock
+HARD_CONSTRAINTS_PROVIDER=bedrock
 
 AWS_ACCESS_KEY_ID=images_key
 AWS_SECRET_ACCESS_KEY=images_secret
 AWS_SESSION_TOKEN=images_session_token
 AWS_DEFAULT_REGION=us-west-2
 
-BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
+HARD_CONSTRAINTS_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
 BEDROCK_AWS_REGION=us-west-2
 BEDROCK_AWS_ACCESS_KEY_ID=bedrock_key
 BEDROCK_AWS_SECRET_ACCESS_KEY=bedrock_secret
@@ -198,6 +234,14 @@ In that setup:
 
 - S3 image access uses `AWS_*`
 - Bedrock uses `BEDROCK_AWS_*`
+
+Recommended hybrid setup for this repo:
+
+- `HARD_CONSTRAINTS_PROVIDER=openai`
+- `SOFT_PREFERENCES_PROVIDER=openai`
+- `GEOLOCATION_PROVIDER=openai`
+- `EXPLANATION_PROVIDER=bedrock`
+- switch an individual extraction stage to `bedrock` only if it performs better in your evaluation queries
 
 ## Hackathon-Available Bedrock Models
 

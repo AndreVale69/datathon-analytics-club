@@ -38,6 +38,52 @@ def rank_listings(
     return sorted(results, key=lambda x: x.score, reverse=True)
 
 
+def build_score_breakdown(
+    listing: dict[str, Any],
+    soft: HardFilters,
+    hard: HardFilters | None = None,
+    query_sim: float = 0.0,
+) -> dict[str, Any]:
+    hard = hard or HardFilters()
+    w_query, w_geo, w_soft = _weights(soft, hard)
+    q = max(0.0, min(1.0, query_sim))
+    geo = _geo_score(listing, soft, hard)
+    soft_s = _soft_score(listing, soft)
+    score = round(w_query * q + w_geo * geo + w_soft * soft_s, 4)
+    target = hard if _has_geo_target(hard) else (soft if _has_geo_target(soft) else None)
+    dist_km = None
+    if target is not None and listing.get("latitude") is not None and listing.get("longitude") is not None:
+        dist_km = _nearest_target_distance(listing["latitude"], listing["longitude"], target)
+
+    return {
+        "final_score": score,
+        "query_score": q,
+        "geo_score": geo,
+        "soft_score": soft_s,
+        "weights": {
+            "query": w_query,
+            "geo": w_geo,
+            "soft": w_soft,
+        },
+        "contributions": {
+            "query": round(w_query * q, 4),
+            "geo": round(w_geo * geo, 4),
+            "soft": round(w_soft * soft_s, 4),
+        },
+        "distance_km": None if dist_km is None else round(dist_km, 3),
+        "price_chf": listing.get("price"),
+        "area_sqm": listing.get("area"),
+        "rooms": listing.get("rooms"),
+        "city": listing.get("city"),
+        "matched_features": [
+            feature for feature in (soft.features or []) if listing.get(f"feature_{feature}") == 1
+        ],
+        "missing_features": [
+            feature for feature in (soft.features or []) if listing.get(f"feature_{feature}") != 1
+        ],
+    }
+
+
 def _weights(soft: HardFilters, hard: HardFilters) -> tuple[float, float, float]:
     """Return (w_query, w_geo, w_soft) that always sum to 1.0.
 

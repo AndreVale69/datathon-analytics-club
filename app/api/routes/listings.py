@@ -6,10 +6,13 @@ from app.config import get_settings
 from app.harness.search_service import query_from_filters, query_from_text
 from app.models.schemas import (
     HealthResponse,
+    ListingExplanationRequest,
+    ListingExplanationResponse,
     ListingsQueryRequest,
     ListingsResponse,
     ListingsSearchRequest,
 )
+from app.participant.explanations import explain_listing_match
 
 router = APIRouter()
 
@@ -36,4 +39,18 @@ def listings_search(request: ListingsSearchRequest) -> ListingsResponse:
     return query_from_filters(
         db_path=settings.db_path,
         hard_facts=request.hard_filters,
+    )
+
+
+@router.post("/listings/explain", response_model=ListingExplanationResponse)
+def explain_listing(request: ListingExplanationRequest) -> ListingExplanationResponse:
+    settings = get_settings()
+    explanation = explain_listing_match(
+        db_path=settings.db_path,
+        query=request.query,
+        listing_id=request.listing_id,
+    )
+    return ListingExplanationResponse(
+        listing_id=request.listing_id,
+        explanation=explanation,
     )

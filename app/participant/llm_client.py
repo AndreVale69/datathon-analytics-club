@@ -110,6 +110,8 @@ class JsonPromptExtractor:
     schema: dict[str, Any]
     few_shot_messages: list[BaseMessage]
     provider: str
+    openai_model: str
+    bedrock_model_id: str
 
     def invoke(self, payload: dict[str, str]) -> dict[str, Any]:
         query = payload["query"]
@@ -122,8 +124,7 @@ class JsonPromptExtractor:
     def _invoke_openai(self, query: str) -> dict[str, Any]:
         from langchain_openai import ChatOpenAI
 
-        model = os.getenv("OPENAI_MODEL", _DEFAULT_OPENAI_MODEL)
-        llm = ChatOpenAI(model=model, temperature=0, seed=42)
+        llm = ChatOpenAI(model=self.openai_model, temperature=0, seed=42)
         response = llm.invoke(
             _build_openai_messages(
                 system_prompt=self.system_prompt,
@@ -135,10 +136,9 @@ class JsonPromptExtractor:
         return _parse_json_response(_message_text(response))
 
     def _invoke_bedrock(self, query: str) -> dict[str, Any]:
-        model_id = os.getenv("BEDROCK_MODEL_ID", _DEFAULT_BEDROCK_MODEL)
         client = _bedrock_client()
         response = client.converse(
-            modelId=model_id,
+            modelId=self.bedrock_model_id,
             messages=[
                 {
                     "role": "user",
@@ -163,16 +163,92 @@ class JsonPromptExtractor:
         return _parse_json_response(text)
 
 
+@dataclass(slots=True)
+class TextPromptGenerator:
+    system_prompt: str
+    provider: str
+    openai_model: str
+    bedrock_model_id: str
+
+    def invoke(self, prompt: str) -> str:
+        if self.provider == "bedrock":
+            return self._invoke_bedrock(prompt)
+        if self.provider == "openai":
+            return self._invoke_openai(prompt)
+        raise ValueError(f"Unsupported AI provider: {self.provider}")
+
+    def _invoke_openai(self, prompt: str) -> str:
+        from langchain_openai import ChatOpenAI
+
+        llm = ChatOpenAI(model=self.openai_model, temperature=0.2, seed=42)
+        response = llm.invoke(
+            [
+                SystemMessage(content=self.system_prompt),
+                HumanMessage(content=prompt),
+            ]
+        )
+        return _message_text(response).strip()
+
+    def _invoke_bedrock(self, prompt: str) -> str:
+        client = _bedrock_client()
+        response = client.converse(
+            modelId=self.bedrock_model_id,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "text": f"{self.system_prompt}\n\nUser: {prompt}\nAssistant:"
+                        }
+                    ],
+                }
+            ],
+            inferenceConfig={"temperature": 0.2},
+        )
+        output = response.get("output", {}).get("message", {}).get("content", [])
+        text = "".join(item.get("text", "") for item in output if "text" in item).strip()
+        if not text:
+            raise ValueError("Bedrock returned no text output.")
+        return text
+
+
 def build_json_prompt_extractor(
     *,
     system_prompt: str,
     schema: dict[str, Any],
     few_shot_messages: list[BaseMessage] | None = None,
+    provider_env_var: str,
+    openai_model_env_var: str,
+    bedrock_model_env_var: str,
+    default_provider: str = "openai",
+    default_openai_model: str = _DEFAULT_OPENAI_MODEL,
+    default_bedrock_model: str = _DEFAULT_BEDROCK_MODEL,
 ) -> JsonPromptExtractor:
-    provider = os.getenv("AI_PROVIDER", "openai").strip().lower() or "openai"
+    provider = os.getenv(provider_env_var, default_provider).strip().lower() or default_provider
     return JsonPromptExtractor(
         system_prompt=system_prompt,
         schema=schema,
         few_shot_messages=list(few_shot_messages or []),
         provider=provider,
+        openai_model=os.getenv(openai_model_env_var, default_openai_model),
+        bedrock_model_id=os.getenv(bedrock_model_env_var, default_bedrock_model),
+    )
+
+
+def build_text_prompt_generator(
+    *,
+    system_prompt: str,
+    provider_env_var: str,
+    openai_model_env_var: str,
+    bedrock_model_env_var: str,
+    default_provider: str = "bedrock",
+    default_openai_model: str = _DEFAULT_OPENAI_MODEL,
+    default_bedrock_model: str = "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+) -> TextPromptGenerator:
+    provider = os.getenv(provider_env_var, default_provider).strip().lower() or default_provider
+    return TextPromptGenerator(
+        system_prompt=system_prompt,
+        provider=provider,
+        openai_model=os.getenv(openai_model_env_var, default_openai_model),
+        bedrock_model_id=os.getenv(bedrock_model_env_var, default_bedrock_model),
     )

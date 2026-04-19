@@ -85,3 +85,27 @@ def test_raw_data_images_are_served_from_local_static_mount(tmp_path: Path) -> N
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/jpeg"
+
+
+def test_post_listings_explain_returns_on_demand_explanation(tmp_path: Path, monkeypatch) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    os.environ["LISTINGS_RAW_DATA_DIR"] = str(repo_root / "raw_data")
+    os.environ["LISTINGS_DB_PATH"] = str(tmp_path / "listings.db")
+
+    monkeypatch.setattr(
+        "app.api.routes.listings.explain_listing_match",
+        lambda **kwargs: "This listing ranks highly because location dominates the score.",
+    )
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/listings/explain",
+            json={"query": "Apartment near ETH", "listing_id": "1"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["listing_id"] == "1"
+    assert "location dominates" in body["explanation"]

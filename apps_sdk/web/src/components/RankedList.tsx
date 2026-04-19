@@ -20,6 +20,7 @@ type RankedListingResult = {
 };
 
 type RankedListProps = {
+  query: string;
   results: RankedListingResult[];
   selectedId: string | null;
   hoveredId: string | null;
@@ -46,7 +47,87 @@ function getImageUrls(listing: ListingData): string[] {
   return Array.from(new Set(candidates));
 }
 
+type InlineToken =
+  | { type: "text"; value: string }
+  | { type: "strong"; value: string }
+  | { type: "code"; value: string };
+
+function parseInlineMarkdown(text: string): InlineToken[] {
+  const tokens: InlineToken[] = [];
+  const pattern = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+  let lastIndex = 0;
+
+  for (const match of text.matchAll(pattern)) {
+    const full = match[0];
+    const index = match.index ?? 0;
+
+    if (index > lastIndex) {
+      tokens.push({ type: "text", value: text.slice(lastIndex, index) });
+    }
+
+    if (full.startsWith("**") && full.endsWith("**")) {
+      tokens.push({ type: "strong", value: full.slice(2, -2) });
+    } else if (full.startsWith("`") && full.endsWith("`")) {
+      tokens.push({ type: "code", value: full.slice(1, -1) });
+    } else {
+      tokens.push({ type: "text", value: full });
+    }
+
+    lastIndex = index + full.length;
+  }
+
+  if (lastIndex < text.length) {
+    tokens.push({ type: "text", value: text.slice(lastIndex) });
+  }
+
+  return tokens;
+}
+
+function renderInlineMarkdown(text: string) {
+  return parseInlineMarkdown(text).map((token, index) => {
+    if (token.type === "strong") {
+      return <strong key={index}>{token.value}</strong>;
+    }
+    if (token.type === "code") {
+      return <code key={index}>{token.value}</code>;
+    }
+    return <span key={index}>{token.value}</span>;
+  });
+}
+
+function MarkdownExplanation({ content }: { content: string }) {
+  const blocks = content
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  return (
+    <div className="markdown-block">
+      {blocks.map((block, blockIndex) => {
+        const lines = block
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+
+        const isBulletList = lines.every((line) => /^[-*]\s+/.test(line));
+        if (isBulletList) {
+          return (
+            <ul key={blockIndex}>
+              {lines.map((line, lineIndex) => (
+                <li key={lineIndex}>{renderInlineMarkdown(line.replace(/^[-*]\s+/, ""))}</li>
+              ))}
+            </ul>
+          );
+        }
+
+        return <p key={blockIndex}>{renderInlineMarkdown(block)}</p>;
+      })}
+    </div>
+  );
+}
+
 export default function RankedList({
+  query,
   results,
   selectedId,
   hoveredId,
@@ -54,8 +135,11 @@ export default function RankedList({
   onHover,
 }: RankedListProps) {
   const [imageIndexes, setImageIndexes] = useState<Record<string, number>>({});
+  const [explanations, setExplanations] = useState<Record<string, string>>({});
+  const [loadingExplanations, setLoadingExplanations] = useState<Record<string, boolean>>({});
   const touchStartXRef = useRef<Record<string, number>>({});
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const API_BASE = "http://localhost:8000";
 
   useEffect(() => {
     if (!selectedId) return;
@@ -99,6 +183,45 @@ export default function RankedList({
         };
 
         const score = result.score;
+        const explanation = explanations[result.listing_id];
+        const explanationLoading = loadingExplanations[result.listing_id] ?? false;
+
+        const requestExplanation = async () => {
+          onSelect(result.listing_id);
+          if (explanation || explanationLoading || !query.trim()) return;
+
+          setLoadingExplanations((current) => ({
+            ...current,
+            [result.listing_id]: true,
+          }));
+
+          try {
+            const res = await fetch(`${API_BASE}/listings/explain`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                query,
+                listing_id: result.listing_id,
+              }),
+            });
+            if (!res.ok) throw new Error(`Server error: ${res.status}`);
+            const data = await res.json();
+            setExplanations((current) => ({
+              ...current,
+              [result.listing_id]: data.explanation ?? result.reason,
+            }));
+          } catch {
+            setExplanations((current) => ({
+              ...current,
+              [result.listing_id]: result.reason,
+            }));
+          } finally {
+            setLoadingExplanations((current) => ({
+              ...current,
+              [result.listing_id]: false,
+            }));
+          }
+        };
 
         return (
           <div
@@ -199,10 +322,37 @@ export default function RankedList({
               </div>
             )}
 
-            {/* AI REASON */}
             <div className="ai-reason">
               <span className="ai-label">💡 Why this match</span>
               <p>{result.reason}</p>
+            </div>
+
+            <div className="explain-wrap">
+              <button
+                className="explain-button"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void requestExplanation();
+                }}
+              >
+                <span className="explain-button-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" focusable="false">
+                    <path
+                      d="M8 1.5a5.5 5.5 0 1 0 3.49 9.75l2.63 2.63a.75.75 0 1 0 1.06-1.06l-2.63-2.63A5.5 5.5 0 0 0 8 1.5Zm0 1.5a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm-.75 1.75a.75.75 0 0 0 0 1.5h.5v2.5a.75.75 0 0 0 1.5 0v-3a.75.75 0 0 0-.75-.75h-1.25Zm.75 5.5a.88.88 0 1 0 0 1.76.88.88 0 0 0 0-1.76Z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </span>
+                {explanationLoading ? "Explaining..." : "Explain me more"}
+              </button>
+
+              {explanation && (
+                <div className="llm-explanation">
+                  <span className="llm-label">Additional insight</span>
+                  <MarkdownExplanation content={explanation} />
+                </div>
+              )}
             </div>
           </div>
         );

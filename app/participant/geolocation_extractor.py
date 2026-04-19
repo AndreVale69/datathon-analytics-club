@@ -88,6 +88,12 @@ def extract_geolocation_constraints(query: str) -> GeolocationConstraints:
             _extractor = build_json_prompt_extractor(
                 system_prompt=_GEOLOCATION_SYSTEM_PROMPT,
                 schema=GeolocationConstraints.model_json_schema(),
+                provider_env_var="GEOLOCATION_PROVIDER",
+                openai_model_env_var="GEOLOCATION_OPENAI_MODEL",
+                bedrock_model_env_var="GEOLOCATION_BEDROCK_MODEL_ID",
+                default_provider="openai",
+                default_openai_model="gpt-5-mini",
+                default_bedrock_model="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
             )
         raw = _extractor.invoke({"query": query})
         constraints = GeolocationConstraints(**raw)
@@ -103,6 +109,14 @@ def enrich_constraints_with_geolocation(
 ) -> QueryConstraints:
     enriched = constraints.model_copy(deep=True)
     geo = extract_geolocation_constraints(query)
+    return apply_geolocation_constraints(enriched, geo)
+
+
+def apply_geolocation_constraints(
+    constraints: QueryConstraints,
+    geo: GeolocationConstraints,
+) -> QueryConstraints:
+    enriched = constraints.model_copy(deep=True)
     _apply_intent(enriched.hard, geo.hard)
     _apply_intent(enriched.soft, geo.soft)
     return enriched

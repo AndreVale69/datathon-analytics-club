@@ -40,19 +40,20 @@ def test_harness_service_converts_hard_filters_to_search_params() -> None:
 
 def test_extract_constraints_drops_unknown_feature_labels(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.participant.constraint_extractor.extractor._extractor",
+        "app.participant.constraint_extractor.extractor._hard_extractor",
         type(
-            "StubExtractor",
+            "HardStubExtractor",
             (),
             {
                 "invoke": staticmethod(
-                    lambda payload: {
-                        "hard": {"features": ["near_eth", "balcony"]},
-                        "soft": {},
-                    }
+                    lambda payload: {"features": ["near_eth", "balcony"]}
                 )
             },
         )(),
+    )
+    monkeypatch.setattr(
+        "app.participant.constraint_extractor.extractor._soft_extractor",
+        type("SoftStubExtractor", (), {"invoke": staticmethod(lambda payload: {})})(),
     )
     monkeypatch.setattr(
         "app.participant.geolocation_extractor.extract_geolocation_constraints",
@@ -62,3 +63,44 @@ def test_extract_constraints_drops_unknown_feature_labels(monkeypatch) -> None:
     result = extract_constraints("Apartments near ETH")
 
     assert result.hard.features == ["balcony"]
+
+
+def test_extract_constraints_merges_hard_and_soft_layers(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.participant.constraint_extractor.extractor._hard_extractor",
+        type(
+            "HardStubExtractor",
+            (),
+            {
+                "invoke": staticmethod(
+                    lambda payload: {
+                        "object_category": ["Wohnung"],
+                        "city": ["Zurich", "Zürich"],
+                        "min_price": 3000,
+                        "max_price": 2000,
+                    }
+                )
+            },
+        )(),
+    )
+    monkeypatch.setattr(
+        "app.participant.constraint_extractor.extractor._soft_extractor",
+        type(
+            "SoftStubExtractor",
+            (),
+            {"invoke": staticmethod(lambda payload: {"features": ["balcony"], "city": ["Zurich", "Zürich"]})},
+        )(),
+    )
+    monkeypatch.setattr(
+        "app.participant.geolocation_extractor.extract_geolocation_constraints",
+        lambda query: GeolocationConstraints(),
+    )
+
+    result = extract_constraints("apartment in zurich under 3000 with balcony")
+
+    assert result.hard.object_category == ["Wohnung"]
+    assert result.hard.city == ["Zurich", "Zürich"]
+    assert result.hard.min_price == 2000
+    assert result.hard.max_price == 3000
+    assert result.soft.features == ["balcony"]
+    assert result.soft.city is None

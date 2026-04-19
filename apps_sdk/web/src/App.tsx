@@ -126,6 +126,7 @@ export default function App() {
             </div>
           ) : visibleResults.length > 0 ? (<>
             <RankedList
+              query={query}
               results={visibleResults}
               selectedId={selectedId}
               hoveredId={hoveredId}

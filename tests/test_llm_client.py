@@ -40,13 +40,16 @@ class _FakeBedrockClient:
 
 
 def test_json_prompt_extractor_uses_openai_by_default(monkeypatch) -> None:
-    monkeypatch.delenv("AI_PROVIDER", raising=False)
+    monkeypatch.delenv("TEST_PROVIDER", raising=False)
     monkeypatch.setattr("langchain_openai.ChatOpenAI", _FakeOpenAIModel)
 
     extractor = build_json_prompt_extractor(
         system_prompt="System prompt",
         schema={"type": "object"},
         few_shot_messages=[HumanMessage(content="example"), AIMessage(content='{"ok":true}')],
+        provider_env_var="TEST_PROVIDER",
+        openai_model_env_var="TEST_OPENAI_MODEL",
+        bedrock_model_env_var="TEST_BEDROCK_MODEL_ID",
     )
 
     result = extractor.invoke({"query": "find me a flat"})
@@ -59,11 +62,12 @@ def test_json_prompt_extractor_uses_openai_by_default(monkeypatch) -> None:
 
 def test_json_prompt_extractor_uses_bedrock_when_requested(monkeypatch) -> None:
     fake_client = _FakeBedrockClient()
-    monkeypatch.setenv("AI_PROVIDER", "bedrock")
+    monkeypatch.setenv("TEST_PROVIDER", "bedrock")
     monkeypatch.setenv("BEDROCK_AWS_REGION", "us-west-2")
     monkeypatch.setenv("BEDROCK_AWS_ACCESS_KEY_ID", "bedrock-key")
     monkeypatch.setenv("BEDROCK_AWS_SECRET_ACCESS_KEY", "bedrock-secret")
     monkeypatch.setenv("BEDROCK_AWS_SESSION_TOKEN", "bedrock-session")
+    monkeypatch.setenv("TEST_BEDROCK_MODEL_ID", "us.anthropic.claude-sonnet-4-5-20250929-v1:0")
 
     seen = {}
 
@@ -78,6 +82,9 @@ def test_json_prompt_extractor_uses_bedrock_when_requested(monkeypatch) -> None:
         system_prompt="System prompt",
         schema={"type": "object"},
         few_shot_messages=[HumanMessage(content="example"), AIMessage(content='{"ok":true}')],
+        provider_env_var="TEST_PROVIDER",
+        openai_model_env_var="TEST_OPENAI_MODEL",
+        bedrock_model_env_var="TEST_BEDROCK_MODEL_ID",
     )
     result = extractor.invoke({"query": "find me a flat"})
 

@@ -171,6 +171,16 @@ class ListingsSearchRequest(BaseModel):
     hard_filters: HardFilters | None = None
 
 
+class ListingExplanationRequest(BaseModel):
+    query: str = Field(min_length=1)
+    listing_id: str = Field(min_length=1)
+
+
+class ListingExplanationResponse(BaseModel):
+    listing_id: str
+    explanation: str
+
+
 class ListingData(BaseModel):
     id: str
     title: str
