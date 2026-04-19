@@ -8,6 +8,7 @@ from app.models.schemas import HardFilters, ListingsResponse, QueryConstraints
 from app.participant.constraint_extractor import extract_constraints
 from app.participant.ranking import rank_listings
 from app.participant.soft_filtering import filter_soft_facts
+from app.participant.description_analysis import compute_query_similarities
 
 
 def query_from_text(
@@ -23,10 +24,11 @@ def query_from_text(
     constraints.hard.offset = offset
 
     candidates = search_listings(db_path, to_hard_filter_params(constraints.hard))
-    candidates = filter_soft_facts(candidates, constraints.soft)
+
+    query_similarities = compute_query_similarities(query, candidates)
 
     return ListingsResponse(
-        listings=rank_listings(candidates, constraints.soft),
+        listings=rank_listings(candidates, constraints.soft, query_similarities),
         meta={
             "hard": constraints.hard.model_dump(exclude_none=True, exclude_defaults=True),
             "soft": constraints.soft.model_dump(exclude_none=True, exclude_defaults=True),
@@ -47,7 +49,7 @@ def query_from_filters(
         listings=rank_listings(candidates, soft),
         meta={
             "hard": hard.model_dump(exclude_none=True, exclude_defaults=True),
-            "soft": {},
+            "soft": soft.model_dump(exclude_none=True, exclude_defaults=True),
         },
     )
 

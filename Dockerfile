@@ -5,6 +5,8 @@ WORKDIR /app
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir uv && uv pip install --system . pytest
 
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
+
 COPY app ./app
 COPY apps_sdk ./apps_sdk
 COPY raw_data ./raw_data

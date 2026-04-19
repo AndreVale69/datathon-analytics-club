@@ -7,15 +7,20 @@ from app.core.hard_filters import _distance_km
 from app.models.schemas import HardFilters, ListingData, RankedListingResult
 
 
+_QUERY_SIM_WEIGHT = 2.0
+
+
 def rank_listings(
     candidates: list[dict[str, Any]],
     soft: HardFilters,
+    query_similarities: dict[str, float] | None = None,
 ) -> list[RankedListingResult]:
+    sims = query_similarities or {}
     results = [
         RankedListingResult(
             listing_id=str(c["listing_id"]),
-            score=_score(c, soft),
-            reason=_reason(c, soft),
+            score=_score(c, soft, sims.get(str(c["listing_id"]), 0.0)),
+            reason=_reason(c, soft, sims.get(str(c["listing_id"]), 0.0)),
             listing=_to_listing_data(c),
         )
         for c in candidates
@@ -23,7 +28,7 @@ def rank_listings(
     return sorted(results, key=lambda x: x.score, reverse=True)
 
 
-def _score(listing: dict[str, Any], soft: HardFilters) -> float:
+def _score(listing: dict[str, Any], soft: HardFilters, query_sim: float = 0.0) -> float:
     score = 0.0
 
     price = listing.get("price")
@@ -107,10 +112,13 @@ def _score(listing: dict[str, Any], soft: HardFilters) -> float:
         else:
             score += max(0.0, 1.0 - dist_km / 15.0) * 0.8
 
+    # ── SEMANTIC QUERY MATCH ─────────────────────────────────────────────────
+    score += query_sim * _QUERY_SIM_WEIGHT
+
     return round(score, 4)
 
 
-def _reason(listing: dict[str, Any], soft: HardFilters) -> str:
+def _reason(listing: dict[str, Any], soft: HardFilters, query_sim: float = 0.0) -> str:
     parts = []
 
     price = listing.get("price")
@@ -146,6 +154,8 @@ def _reason(listing: dict[str, Any], soft: HardFilters) -> str:
             listing["longitude"],
         )
         parts.append(f"{dist_km:.1f} km from preferred location")
+    if query_sim > 0.3:
+        parts.append(f"semantic match {query_sim:.2f}")
     return "; ".join(parts) if parts else "good candidate"
 
 
