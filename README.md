@@ -13,7 +13,8 @@ The repo contains:
 
 ## Table Of Contents
 
-- [AWS Side Challenge](#aws-side-challenge)
+- [Side Challenges](#side-challenges)
+  - [AWS Side Challenge](#aws-side-challenge)
 - [What The Challenge Asks For](#what-the-challenge-asks-for)
 - [Current Repo Status](#current-repo-status)
 - [Local Secrets And Env Files](#local-secrets-and-env-files)
@@ -22,7 +23,9 @@ The repo contains:
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
 
-## AWS Side Challenge
+## Side Challenges
+
+### AWS Side Challenge
 
 This project is also submitted for the AWS side challenge.
 
@@ -98,6 +101,9 @@ Important variables:
 - `GEOLOCATION_PROVIDER`
 - `GEOLOCATION_OPENAI_MODEL`
 - `GEOLOCATION_BEDROCK_MODEL_ID`
+- `DESCRIPTION_FEATURES_PROVIDER`
+- `DESCRIPTION_FEATURES_OPENAI_MODEL`
+- `DESCRIPTION_FEATURES_BEDROCK_MODEL_ID`
 - `EXPLANATION_PROVIDER`
 - `EXPLANATION_OPENAI_MODEL`
 - `EXPLANATION_BEDROCK_MODEL_ID`
@@ -139,6 +145,10 @@ GEOLOCATION_PROVIDER=openai
 GEOLOCATION_OPENAI_MODEL=gpt-5-mini
 GEOLOCATION_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
 
+DESCRIPTION_FEATURES_PROVIDER=bedrock
+DESCRIPTION_FEATURES_OPENAI_MODEL=gpt-5-mini
+DESCRIPTION_FEATURES_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
+
 EXPLANATION_PROVIDER=bedrock
 EXPLANATION_OPENAI_MODEL=gpt-5-mini
 EXPLANATION_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
@@ -168,6 +178,7 @@ Stage defaults:
 - Hard constraints: `openai` with `gpt-5-mini`
 - Soft preferences: `openai` with `gpt-5-mini`
 - Geolocation intent: `openai` with `gpt-5-mini`
+- Description feature extraction: `bedrock` with `us.anthropic.claude-sonnet-4-5-20250929-v1:0`
 - Explanation generation: `bedrock` with `us.anthropic.claude-sonnet-4-5-20250929-v1:0`
 - For any stage set to `bedrock`, the stage uses its `*_BEDROCK_MODEL_ID` together with `BEDROCK_AWS_*` credentials or the standard AWS credential chain
 - `BEDROCK_AWS_REGION` is optional; if empty, the app falls back to `AWS_REGION` or `AWS_DEFAULT_REGION`
@@ -188,6 +199,9 @@ SOFT_PREFERENCES_OPENAI_MODEL=gpt-5-mini
 
 GEOLOCATION_PROVIDER=openai
 GEOLOCATION_OPENAI_MODEL=gpt-5-mini
+
+DESCRIPTION_FEATURES_PROVIDER=bedrock
+DESCRIPTION_FEATURES_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
 
 EXPLANATION_PROVIDER=bedrock
 EXPLANATION_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
@@ -211,6 +225,7 @@ Notes:
 - When a stage uses `openai`, that stage ignores its Bedrock model ID.
 - When a stage uses `bedrock`, that stage ignores its OpenAI model setting.
 - If you are inside the AWS workshop environment, credentials may already be injected into the shell or attached role, so you might only need to set the stage provider and its Bedrock model ID.
+- The description-feature stage can use a separate Bedrock credential prefix via `DESC_BEDROCK_AWS_*` if you want to isolate that traffic from the main Bedrock settings.
 - The frontend `Explain me why` action calls the explanation stage only on demand, so you do not pay an explanation-model call for every search result.
 
 If you need one AWS credential set for S3 images and a different one for Bedrock, keep the image credentials in the standard AWS variables and put the Bedrock credentials in the dedicated Bedrock variables:
@@ -240,6 +255,7 @@ Recommended hybrid setup for this repo:
 - `HARD_CONSTRAINTS_PROVIDER=openai`
 - `SOFT_PREFERENCES_PROVIDER=openai`
 - `GEOLOCATION_PROVIDER=openai`
+- `DESCRIPTION_FEATURES_PROVIDER=bedrock`
 - `EXPLANATION_PROVIDER=bedrock`
 - switch an individual extraction stage to `bedrock` only if it performs better in your evaluation queries
 

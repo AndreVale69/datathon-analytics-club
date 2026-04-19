@@ -263,64 +263,70 @@ export default function RankedList({
             role="button"
             tabIndex={0}
           >
-            {/* IMAGE SECTION */}
-            {activeImageUrl && (
-              <div className="listing-image-wrap">
-
-                {/* OVERLAY */}
-                <div className="image-overlay">
-                  <div className="price-badge">
-                    {formatPrice(listing.price_chf)}
-                  </div>
-
-                  <div
-                    className={`score-badge ${
-                      score > 0.8
-                        ? "high"
-                        : score > 0.5
-                        ? "mid"
-                        : "low"
-                    }`}
-                  >
-                    {Math.round(score * 100)}%
-                  </div>
+            <div className="listing-card-topline">
+              <div className="listing-card-badges">
+                <div className="price-badge">
+                  {formatPrice(listing.price_chf)}
                 </div>
 
-                {/* NAV BUTTONS */}
-                {imageUrls.length > 1 && (
-                  <>
-                    <button
-                      className="listing-image-button listing-image-button-prev"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        advanceImage(-1);
-                      }}
-                      type="button"
-                    >
-                      ‹
-                    </button>
-
-                    <button
-                      className="listing-image-button listing-image-button-next"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        advanceImage(1);
-                      }}
-                      type="button"
-                    >
-                      ›
-                    </button>
-                  </>
-                )}
-
-                <img
-                  className="listing-image"
-                  src={activeImageUrl}
-                  alt={listing.title}
-                  loading="lazy"
-                />
+                <div
+                  className={`score-badge ${
+                    score > 0.8
+                      ? "high"
+                      : score > 0.5
+                      ? "mid"
+                      : "low"
+                  }`}
+                >
+                  {Math.round(score * 100)}%
+                </div>
               </div>
-            )}
+            </div>
+
+            {/* IMAGE SECTION */}
+            <div className={`listing-image-wrap ${activeImageUrl ? "" : "listing-image-wrap-empty"}`}>
+              {activeImageUrl ? (
+                <>
+                  {/* NAV BUTTONS */}
+                  {imageUrls.length > 1 && (
+                    <>
+                      <button
+                        className="listing-image-button listing-image-button-prev"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          advanceImage(-1);
+                        }}
+                        type="button"
+                      >
+                        ‹
+                      </button>
+
+                      <button
+                        className="listing-image-button listing-image-button-next"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          advanceImage(1);
+                        }}
+                        type="button"
+                      >
+                        ›
+                      </button>
+                    </>
+                  )}
+
+                  <img
+                    className="listing-image"
+                    src={activeImageUrl}
+                    alt={listing.title}
+                    loading="lazy"
+                  />
+                </>
+              ) : (
+                <div className="listing-image-fallback" aria-hidden="true">
+                  <span className="listing-image-fallback-label">No photo available</span>
+                </div>
+              )}
+            </div>
 
             {/* HEADER */}
             <div className="listing-card-header">

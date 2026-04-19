@@ -24,6 +24,11 @@ type RankedListingResult = {
   listing: ListingData;
 };
 
+type ToolResultPayload = {
+  query?: string;
+  listings?: RankedListingResult[];
+};
+
 const API_BASE = "http://localhost:8000";
 
 export default function App() {
@@ -36,6 +41,18 @@ export default function App() {
   const [hoveredId, setHoveredId]   = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(10);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  function applyToolResult(payload: ToolResultPayload) {
+    const listings = Array.isArray(payload.listings) ? payload.listings : [];
+    setQuery(typeof payload.query === "string" ? payload.query : "");
+    setResults(listings);
+    setError(null);
+    setLoading(false);
+    setIsOpen(true);
+    setSelectedId(null);
+    setHoveredId(null);
+    setVisibleCount(10);
+  }
 
   async function search() {
     if (!query.trim()) return;
@@ -87,6 +104,40 @@ export default function App() {
     textarea.style.height = `${nextHeight}px`;
     textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
   }, [query]);
+
+  useEffect(() => {
+    function handleToolResult(event: Event) {
+      const customEvent = event as CustomEvent<ToolResultPayload>;
+      if (customEvent.detail) {
+        applyToolResult(customEvent.detail);
+      }
+    }
+
+    function handleMessage(event: MessageEvent<unknown>) {
+      const data = event.data;
+      if (!data || typeof data !== "object") return;
+
+      const message = data as {
+        type?: string;
+        structuredContent?: ToolResultPayload;
+        payload?: ToolResultPayload;
+      };
+
+      if (message.type !== "tool-result") return;
+
+      const payload = message.structuredContent ?? message.payload;
+      if (payload) {
+        applyToolResult(payload);
+      }
+    }
+
+    window.addEventListener("tool-result", handleToolResult as EventListener);
+    window.addEventListener("message", handleMessage);
+    return () => {
+      window.removeEventListener("tool-result", handleToolResult as EventListener);
+      window.removeEventListener("message", handleMessage);
+    };
+  }, []);
 
   return (
     <div className="app-shell">

@@ -47,12 +47,13 @@ def build_score_breakdown(
     soft: HardFilters,
     hard: HardFilters | None = None,
     query_sim: float = 0.0,
+    extracted: ExtractedFeatures | None = None,
 ) -> dict[str, Any]:
     hard = hard or HardFilters()
     w_query, w_geo, w_soft = _weights(soft, hard)
     q = max(0.0, min(1.0, query_sim))
     geo = _geo_score(listing, soft, hard)
-    soft_s = _soft_score(listing, soft)
+    soft_s = _soft_score(listing, soft, extracted)
     score = round(w_query * q + w_geo * geo + w_soft * soft_s, 4)
     target = hard if _has_geo_target(hard) else (soft if _has_geo_target(soft) else None)
     dist_km = None
@@ -85,6 +86,8 @@ def build_score_breakdown(
         "missing_features": [
             feature for feature in (soft.features or []) if listing.get(f"feature_{feature}") != 1
         ],
+        "matched_soft_features": _matched_soft_features(soft, extracted),
+        "description_features": extracted.model_dump(exclude_none=True) if extracted else {},
     }
 
 

@@ -14,6 +14,14 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def _env_or_default(name: str, default: str) -> str:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    cleaned = value.strip()
+    return cleaned or default
+
+
 def _find_default_raw_data_dir() -> Path:
     root = _project_root()
     configured = os.getenv("LISTINGS_RAW_DATA_DIR")
@@ -44,15 +52,15 @@ def get_settings() -> Settings:
     return Settings(
         raw_data_dir=_find_default_raw_data_dir(),
         db_path=_default_db_path(),
-        s3_bucket=os.getenv(
+        s3_bucket=_env_or_default(
             "LISTINGS_S3_BUCKET",
             "crawl-data-951752554117-eu-central-2-an",
         ),
-        s3_region=os.getenv("LISTINGS_S3_REGION", "eu-central-2"),
-        s3_prefix=os.getenv("LISTINGS_S3_PREFIX", "prod"),
-        geocoding_api_base_url=os.getenv(
+        s3_region=_env_or_default("LISTINGS_S3_REGION", "eu-central-2"),
+        s3_prefix=_env_or_default("LISTINGS_S3_PREFIX", "prod"),
+        geocoding_api_base_url=_env_or_default(
             "GEOCODING_API_BASE_URL",
             "https://api3.geo.admin.ch/rest/services/ech/SearchServer",
         ),
-        geocoding_timeout_seconds=float(os.getenv("GEOCODING_TIMEOUT_SECONDS", "5.0")),
+        geocoding_timeout_seconds=float(_env_or_default("GEOCODING_TIMEOUT_SECONDS", "5.0")),
     )

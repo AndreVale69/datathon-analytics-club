@@ -7,18 +7,21 @@ Descriptions are batched (_BATCH_SIZE per call) to minimise latency.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import logging
 from typing import Any
 
 from pydantic import BaseModel
 
-from app.participant.llm_client import JsonPromptExtractor
+from app.participant.llm_client import build_json_prompt_extractor
 
 logger = logging.getLogger(__name__)
 
 SIMILARITY_THRESHOLD = 0.35
-_MAX_CANDIDATES = 10     # process at most this many descriptions per request
+_MAX_CANDIDATES = 5      # process at most this many descriptions per request
+_BATCH_SIZE = 5          # descriptions per LLM call
 _MAX_DESC_CHARS = 1500   # truncate long descriptions to keep tokens bounded
+_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="desc-extract")
 
 
 class ExtractedFeatures(BaseModel):
@@ -137,11 +140,16 @@ _extractor = None
 def _get_extractor():
     global _extractor
     if _extractor is None:
-        _extractor = JsonPromptExtractor(
+        _extractor = build_json_prompt_extractor(
             system_prompt=_SYSTEM_PROMPT,
             schema=_SCHEMA,
             few_shot_messages=[],
-            provider="bedrock",
+            provider_env_var="DESCRIPTION_FEATURES_PROVIDER",
+            openai_model_env_var="DESCRIPTION_FEATURES_OPENAI_MODEL",
+            bedrock_model_env_var="DESCRIPTION_FEATURES_BEDROCK_MODEL_ID",
+            default_provider="bedrock",
+            default_openai_model="gpt-5-mini",
+            default_bedrock_model="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
             bedrock_env_prefix="DESC_BEDROCK",
         )
     return _extractor
@@ -152,6 +160,28 @@ def _build_batch_query(batch: list[tuple[str, str]]) -> str:
     for lid, text in batch:
         parts.append(f"[{lid}]\n{text[:_MAX_DESC_CHARS].strip()}")
     return "\n\n".join(parts)
+
+
+def _chunk(items: list[tuple[str, str]], size: int) -> list[list[tuple[str, str]]]:
+    return [items[index:index + size] for index in range(0, len(items), size)]
+
+
+def _extract_batch(batch: list[tuple[str, str]]) -> dict[str, ExtractedFeatures]:
+    partial: dict[str, ExtractedFeatures] = {}
+    try:
+        raw: dict = _get_extractor().invoke({"query": _build_batch_query(batch)})
+        for lid, feats in raw.items():
+            if not isinstance(feats, dict):
+                continue
+            try:
+                partial[lid] = ExtractedFeatures(**{
+                    k: v for k, v in feats.items() if k in _VALID_FIELDS
+                })
+            except Exception:
+                logger.debug("Could not parse extracted features for listing %s", lid)
+    except Exception:
+        logger.exception("Feature extraction LLM call failed for a description batch")
+    return partial
 
 
 def extract_features_from_descriptions(
@@ -183,22 +213,13 @@ def extract_features_from_descriptions(
     eligible = eligible[:_MAX_CANDIDATES]
 
     result: dict[str, ExtractedFeatures] = {}
-    try:
-        raw: dict = _get_extractor().invoke({"query": _build_batch_query(eligible)})
-        for lid, feats in raw.items():
-            if not isinstance(feats, dict):
-                continue
-            try:
-                result[lid] = ExtractedFeatures(**{
-                    k: v for k, v in feats.items() if k in _VALID_FIELDS
-                })
-            except Exception:
-                logger.debug("Could not parse extracted features for listing %s", lid)
-    except Exception:
-        logger.exception("Feature extraction LLM call failed")
+    batches = _chunk(eligible, _BATCH_SIZE)
+    futures = [_POOL.submit(_extract_batch, batch) for batch in batches]
+    for future in futures:
+        result.update(future.result())
 
     logger.debug(
-        "Extracted features for %d/%d eligible candidates (threshold=%.2f)",
-        len(result), len(eligible), threshold,
+        "Extracted features for %d/%d eligible candidates across %d batch(es) (threshold=%.2f)",
+        len(result), len(eligible), len(batches), threshold,
     )
     return result

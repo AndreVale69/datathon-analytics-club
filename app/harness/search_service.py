@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from app.core.s3 import get_image_urls_by_listing_id
 from app.core.hard_filters import HardFilterParams, search_listings
 from app.models.schemas import HardFilters, ListingsResponse, QueryConstraints
 from app.participant.constraint_extractor import extract_constraints
@@ -25,6 +26,7 @@ def query_from_text(
     constraints.hard.offset = offset
 
     candidates = search_listings(db_path, to_hard_filter_params(constraints.hard))
+    _hydrate_candidate_image_urls(candidates, db_path=db_path)
 
     query_similarities = compute_query_similarities(query, candidates)
     extracted_features = extract_features_from_descriptions(candidates, query_similarities)
@@ -46,6 +48,7 @@ def query_from_filters(
     hard = hard_facts or HardFilters()
     soft = QueryConstraints.SoftFilters()
     candidates = search_listings(db_path, to_hard_filter_params(hard))
+    _hydrate_candidate_image_urls(candidates, db_path=db_path)
     candidates = filter_soft_facts(candidates, soft)
     return ListingsResponse(
         listings=rank_listings(candidates, soft, hard),
@@ -81,3 +84,19 @@ def to_hard_filter_params(hard_facts: HardFilters) -> HardFilterParams:
         offset=hard_facts.offset,
         sort_by=hard_facts.sort_by,
     )
+
+
+def _hydrate_candidate_image_urls(candidates: list[dict[str, Any]], *, db_path: Path) -> None:
+    for candidate in candidates:
+        listing_id = candidate.get("listing_id")
+        if not listing_id:
+            continue
+        try:
+            image_urls = get_image_urls_by_listing_id(
+                db_path=db_path,
+                listing_id=str(listing_id),
+            )
+        except Exception:
+            image_urls = []
+        candidate["image_urls"] = image_urls
+        candidate["hero_image_url"] = image_urls[0] if image_urls else None

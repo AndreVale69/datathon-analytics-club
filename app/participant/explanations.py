@@ -9,6 +9,7 @@ from app.harness.search_service import to_hard_filter_params
 from app.models.schemas import QueryConstraints
 from app.participant.constraint_extractor import extract_constraints
 from app.participant.description_analysis import compute_query_similarities
+from app.participant.description_extractor import extract_features_from_descriptions
 from app.participant.llm_client import build_text_prompt_generator
 from app.participant.ranking import build_score_breakdown, rank_listings
 
@@ -38,7 +39,8 @@ def explain_listing_match(*, db_path: Path, query: str, listing_id: str) -> str:
 
     candidates = search_listings(db_path, to_hard_filter_params(constraints.hard))
     query_similarities = compute_query_similarities(query, candidates)
-    ranked = rank_listings(candidates, constraints.soft, constraints.hard, query_similarities)
+    extracted_features = extract_features_from_descriptions(candidates, query_similarities)
+    ranked = rank_listings(candidates, constraints.soft, constraints.hard, query_similarities, extracted_features)
 
     current_index = next((index for index, item in enumerate(ranked) if item.listing_id == listing_id), None)
     if current_index is None:
@@ -50,6 +52,7 @@ def explain_listing_match(*, db_path: Path, query: str, listing_id: str) -> str:
         constraints.soft,
         constraints.hard,
         query_similarities.get(listing_id, 0.0),
+        extracted_features.get(listing_id),
     )
 
     comparison_payload = None
@@ -67,6 +70,7 @@ def explain_listing_match(*, db_path: Path, query: str, listing_id: str) -> str:
                 constraints.soft,
                 constraints.hard,
                 query_similarities.get(comparison_result.listing_id, 0.0),
+                extracted_features.get(comparison_result.listing_id),
             ),
         }
 
