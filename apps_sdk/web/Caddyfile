@@ -1,0 +1,19 @@
+:80 {
+    handle /health {
+        reverse_proxy api:8000
+    }
+
+    handle /listings* {
+        reverse_proxy api:8000
+    }
+
+    handle /raw-data-images/* {
+        reverse_proxy api:8000
+    }
+
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
+}

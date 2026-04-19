@@ -35,7 +35,7 @@ type ListingImagesPayload = {
   hero_image_url?: string | null;
 };
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
 export default function App() {
   const [query, setQuery]       = useState("");

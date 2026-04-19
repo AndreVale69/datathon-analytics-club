@@ -36,6 +36,14 @@ services:
       - api
     volumes:
       - .:/app
+  web:
+    build:
+      context: .
+      dockerfile: apps_sdk/web/Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
   tests:
     build:
       context: .
