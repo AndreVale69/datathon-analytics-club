@@ -7,12 +7,13 @@ from app.core.hard_filters import _distance_km
 from app.models.schemas import HardFilters, ListingData, RankedListingResult
 
 
-_W_QUERY_GEO    = 0.4
-_W_GEO          = 0.4
-_W_SOFT_GEO     = 0.2
+_W_GEO             = 0.55  # fixed geo share when geo is active
+_W_SOFT_MAX_GEO    = 0.25  # max soft share when geo is active   → query_min = 0.20
+_W_SOFT_MAX_NO_GEO = 0.80  # max soft share when geo is absent   → query_min = 0.20
 
-_W_QUERY_NO_GEO = 0.6
-_W_SOFT_NO_GEO  = 0.4
+# Number of active soft criteria at which soft_factor reaches 1.0 (full soft weight).
+# Below this, the soft weight scales linearly and the surplus goes to query.
+_N_SOFT_SAT = 5
 
 _GEO_DEFAULT_RADIUS_KM = 10.0
 
@@ -37,13 +38,34 @@ def rank_listings(
     return sorted(results, key=lambda x: x.score, reverse=True)
 
 
+def _weights(soft: HardFilters, hard: HardFilters) -> tuple[float, float, float]:
+    """Return (w_query, w_geo, w_soft) that always sum to 1.0.
+
+    soft_factor scales the soft weight linearly from 0 (no soft criteria) to
+    1 (N_SOFT_SAT or more criteria active), with the surplus redistributed to query.
+    """
+    n = _count_soft_constraints(soft)
+    soft_factor = min(1.0, n / _N_SOFT_SAT) if n > 0 else 0.0
+
+    use_geo = _has_geo_target(hard) or _has_geo_target(soft)
+    if use_geo:
+        w_soft  = _W_SOFT_MAX_GEO * soft_factor
+        w_geo   = _W_GEO
+        w_query = 1.0 - w_geo - w_soft
+    else:
+        w_soft  = _W_SOFT_MAX_NO_GEO * soft_factor
+        w_geo   = 0.0
+        w_query = 1.0 - w_soft
+
+    return w_query, w_geo, w_soft
+
+
 def _score(listing: dict[str, Any], soft: HardFilters, hard: HardFilters, query_sim: float = 0.0) -> float:
-    q = max(0.0, min(1.0, query_sim))
-    geo = _geo_score(listing, soft, hard)
+    w_query, w_geo, w_soft = _weights(soft, hard)
+    q     = max(0.0, min(1.0, query_sim))
+    geo   = _geo_score(listing, soft, hard)
     soft_s = _soft_score(listing, soft)
-    if geo > 0.0 or _has_geo_target(hard) or _has_geo_target(soft):
-        return round(_W_QUERY_GEO * q + _W_GEO * geo + _W_SOFT_GEO * soft_s, 4)
-    return round(_W_QUERY_NO_GEO * q + _W_SOFT_NO_GEO * soft_s, 4)
+    return round(w_query * q + w_geo * geo + w_soft * soft_s, 4)
 
 
 def _geo_score(listing: dict[str, Any], soft: HardFilters, hard: HardFilters) -> float:
@@ -59,6 +81,18 @@ def _geo_score(listing: dict[str, Any], soft: HardFilters, hard: HardFilters) ->
         return 0.0
     radius = target.radius_km or _GEO_DEFAULT_RADIUS_KM
     return max(0.0, 1.0 - dist_km / radius)
+
+
+def _count_soft_constraints(soft: HardFilters) -> int:
+    """Count how many soft criteria are active (same criteria as _soft_score uses)."""
+    n = 0
+    if soft.features:       n += 1
+    if soft.max_price:      n += 1
+    if soft.min_rooms:      n += 1
+    if soft.min_area:       n += 1
+    if soft.city:           n += 1
+    if getattr(soft, "furnished", None): n += 1
+    return n
 
 
 def _soft_score(listing: dict[str, Any], soft: HardFilters) -> float:
@@ -102,13 +136,14 @@ def _soft_score(listing: dict[str, Any], soft: HardFilters) -> float:
 def _reason(listing: dict[str, Any], soft: HardFilters, hard: HardFilters, query_sim: float = 0.0) -> str:
     parts = []
 
-    q = max(0.0, min(1.0, query_sim))
-    geo = _geo_score(listing, soft, hard)
+    w_query, w_geo, w_soft = _weights(soft, hard)
+    q      = max(0.0, min(1.0, query_sim))
+    geo    = _geo_score(listing, soft, hard)
     soft_s = _soft_score(listing, soft)
 
-    parts.append(f"semantic {q:.0%}")
-    parts.append(f"geo {geo:.0%}")
-    parts.append(f"soft {soft_s:.0%}")
+    parts.append(f"semantic {q:.0%}×{w_query:.0%}")
+    parts.append(f"geo {geo:.0%}×{w_geo:.0%}")
+    parts.append(f"soft {soft_s:.0%}×{w_soft:.0%}")
 
     lat = listing.get("latitude")
     lon = listing.get("longitude")
