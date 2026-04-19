@@ -28,7 +28,7 @@ def query_from_text(
     query_similarities = compute_query_similarities(query, candidates)
 
     return ListingsResponse(
-        listings=rank_listings(candidates, constraints.soft, query_similarities),
+        listings=rank_listings(candidates, constraints.soft, constraints.hard, query_similarities),
         meta={
             "hard": constraints.hard.model_dump(exclude_none=True, exclude_defaults=True),
             "soft": constraints.soft.model_dump(exclude_none=True, exclude_defaults=True),

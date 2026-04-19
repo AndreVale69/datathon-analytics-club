@@ -55,8 +55,10 @@ canton           : single 2-letter code — prefer city (65% of DB has no canton
                    Valid: ZH BE LU UR SZ OW NW GL ZG FR SO BS BL SH AR AI SG GR
                           AG TG TI VD VS NE GE JU
 
-latitude / longitude / radius_km : resolved by a separate geocoding pipeline —
-                   DO NOT set these fields. Leave them empty.
+latitude / longitude / radius_km : resolved by a separate geocoding pipeline for
+                   SUB-CITY places only (landmarks, campuses, stations, streets,
+                   districts). DO NOT set these fields. Leave them empty.
+                   Cities and municipalities MUST go in the `city` field instead.
 
 features : list — ONLY from: balcony, elevator, parking, garage, pets_allowed,
            private_laundry, wheelchair_accessible, child_friendly,
@@ -99,14 +101,28 @@ features : list — ONLY from: balcony, elevator, parking, garage, pets_allowed,
 "available immediately" → "2026-04-18"
 
 ### city vs. named-place proximity
-If the place reference IS a city or municipality name, always extract it as city —
-regardless of phrasing ("near Zurich", "close to Bern", "around Geneva", "Nähe Zürich",
-"proche de Lausanne" all → city=["Zurich","Zürich"] / ["Bern"] / ["Geneva","Genève"] etc.).
 
-If the place reference is a SUB-CITY location (landmark, campus, station name, street,
-district, airport) — e.g. "near ETH Zurich", "close to Paradeplatz", "next to Zurich HB",
-"within 2km of the university", "près de la gare de Lausanne" — DO NOT map it to any field.
-These are resolved by a separate geocoding pipeline.
+RULE: if the place reference is a city or municipality name → ALWAYS put it in `city`,
+regardless of phrasing. Proximity words ("near", "close to", "around", "Nähe", "proche de",
+"vicino a") do NOT change this — strip them and extract the city name.
+
+  "near Zurich" / "Nähe Zürich"          → hard.city=["Zurich","Zürich"]
+  "close to Bern" / "près de Berne"      → hard.city=["Bern"]
+  "around Geneva" / "proche de Genève"   → hard.city=["Geneva","Genève"]
+  "in Lausanne area" / "région lausannoise" → hard.city=["Lausanne"]
+  "near Basel" / "Nähe Basel"            → hard.city=["Basel","Bâle"]
+
+RULE: if the place reference is a SUB-CITY location (landmark, campus, station, street,
+district, airport) → DO NOT map it to any field. Leave it to the geocoding pipeline.
+
+  "near ETH Zurich"              → omit (geocoding pipeline)
+  "close to Paradeplatz"         → omit (geocoding pipeline)
+  "next to Zurich HB"            → omit (geocoding pipeline)
+  "within 2km of the university" → omit (geocoding pipeline)
+  "près de la gare de Lausanne"  → omit (geocoding pipeline)
+  "Kreis 4" / "Seefeld"          → omit (geocoding pipeline)
+
+When both appear — e.g. "near ETH in Zurich" — capture the city, omit the sub-city place.
 
 ### features
 Explicit "with X" / "muss X haben" → hard.features
@@ -173,9 +189,17 @@ FEW_SHOT_MESSAGES = [
     HumanMessage(content='Looking for affordable student accommodation in Zurich, near ETH, ideally pets allowed'),
     AIMessage(content='{"hard":{"object_category":["WG-Zimmer","Einzelzimmer"],"city":["Zurich","Zürich"]},"soft":{"features":["pets_allowed"]}}'),
 
-    # "Altbau" not in schema; "Kreis 4" not a city; price+rooms+city hard; "quiet" soft
+    # "Altbau" not in schema; "Kreis 4" is a district (sub-city) → geocoding pipeline; city hard; "quiet" soft
     HumanMessage(content='2 Zimmer Altbau in Zürich Kreis 4, max 2500, quiet area'),
-    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":2,"max_rooms":2,"max_price":2500,"city":["Zurich","Zürich"]},"soft":{}}'),
+    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":2,"max_rooms":2,"max_price":2500,"city":["Zurich","Zürich"]},"soft":{"quiet":true}}'),
+
+    # "Nähe Basel" → city (proximity word stripped); sub-city landmark absent
+    HumanMessage(content='3 Zimmer Wohnung Nähe Basel, max 2000 CHF'),
+    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"min_rooms":3,"max_rooms":3,"max_price":2000,"city":["Basel","Bâle"]},"soft":{}}'),
+
+    # city captured, sub-city station omitted
+    HumanMessage(content='apartment near Lausanne, close to the train station, max 1800 CHF'),
+    AIMessage(content='{"hard":{"offer_type":"RENT","object_category":["Wohnung"],"max_price":1800,"city":["Lausanne"]},"soft":{}}'),
 
     # "near Zurich" → city filter; "near ETH" → geocoding pipeline (omit here)
     HumanMessage(content='flat near Zurich, ideally close to ETH, max 2000 CHF'),
