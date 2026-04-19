@@ -344,12 +344,12 @@ export default function RankedList({
                     />
                   </svg>
                 </span>
-                {explanationLoading ? "Explaining..." : "Explain me more"}
+                {explanationLoading ? "Preparing explanation..." : "Explain this score"}
               </button>
 
               {explanation && (
                 <div className="llm-explanation">
-                  <span className="llm-label">Additional insight</span>
+                  <span className="llm-label">Detailed explanation</span>
                   <MarkdownExplanation content={explanation} />
                 </div>
               )}
