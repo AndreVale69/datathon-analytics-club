@@ -35,6 +35,7 @@ def rank_listings(
             score=_score(c, soft, hard, sims.get(str(c["listing_id"]), 0.0), feats.get(str(c["listing_id"]))),
             reason=_reason(c, soft, hard, sims.get(str(c["listing_id"]), 0.0), feats.get(str(c["listing_id"]))),
             listing=_to_listing_data(c),
+            matched_soft_features=_matched_soft_features(soft, feats.get(str(c["listing_id"]))),
         )
         for c in candidates
     ]
@@ -224,6 +225,23 @@ def _soft_score(listing: dict[str, Any], soft: HardFilters,
     if not scores:
         return 0.0
     return sum(scores) / len(scores)
+
+
+def _matched_soft_features(soft: HardFilters, extracted: ExtractedFeatures | None) -> list[str]:
+    """Return soft field names where the user requested the feature AND the description confirms it."""
+    matched: list[str] = []
+    if extracted is None:
+        return matched
+    for soft_field, ext_field in _BOOL_SOFT_TO_EXTRACTED:
+        if getattr(soft, soft_field, None) and getattr(extracted, ext_field, None):
+            matched.append(soft_field)
+    min_bed = getattr(soft, "min_bedrooms", None)
+    if min_bed and extracted.bedrooms is not None and extracted.bedrooms >= min_bed:
+        matched.append("min_bedrooms")
+    min_bath = getattr(soft, "min_bathrooms", None)
+    if min_bath and extracted.bathrooms is not None and extracted.bathrooms >= min_bath:
+        matched.append("min_bathrooms")
+    return matched
 
 
 def _reason(listing: dict[str, Any], soft: HardFilters, hard: HardFilters,

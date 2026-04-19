@@ -17,6 +17,7 @@ type RankedListingResult = {
   score: number;
   reason: string;
   listing: ListingData;
+  matched_soft_features?: string[];
 };
 
 type RankedListProps = {
@@ -25,6 +26,32 @@ type RankedListProps = {
   hoveredId: string | null;
   onSelect: (listingId: string) => void;
   onHover: (listingId: string | null) => void;
+};
+
+const SOFT_FEATURE_LABELS: Record<string, string> = {
+  furnished: "Furnished",
+  garden: "Garden",
+  rooftop: "Rooftop terrace",
+  terrace: "Terrace",
+  cellar: "Cellar",
+  bathtub: "Bathtub",
+  view: "Scenic view",
+  not_ground_floor: "Not ground floor",
+  bright: "Bright",
+  modern: "Modern",
+  good_layout: "Good layout",
+  quiet: "Quiet",
+  near_lake: "Near lake",
+  safe: "Safe area",
+  good_schools: "Good schools",
+  low_traffic: "Low traffic",
+  green_space: "Green space",
+  walkable_shopping: "Shops nearby",
+  good_transport: "Good transport",
+  family_friendly: "Family friendly",
+  playground_nearby: "Playground nearby",
+  min_bedrooms: "Bedrooms",
+  min_bathrooms: "Bathrooms",
 };
 
 function formatPrice(price?: number | null): string {
@@ -194,6 +221,17 @@ export default function RankedList({
                 {features.map((f) => (
                   <span key={f} className="feature-badge">
                     {f.replaceAll("_", " ")}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* DESCRIPTION-MATCHED SOFT FEATURES */}
+            {!!(result.matched_soft_features?.length) && (
+              <div className="feature-row">
+                {result.matched_soft_features.map((f) => (
+                  <span key={f} className="soft-match-badge">
+                    ✓ {SOFT_FEATURE_LABELS[f] ?? f.replaceAll("_", " ")}
                   </span>
                 ))}
               </div>

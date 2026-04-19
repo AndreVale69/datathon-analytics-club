@@ -21,15 +21,22 @@ def _json_instruction(schema: dict[str, Any]) -> str:
     )
 
 
-def _bedrock_client():
+def _bedrock_client(env_prefix: str = "BEDROCK"):
+    """Build a boto3 bedrock-runtime client from env vars with the given prefix.
+
+    Reads: {prefix}_AWS_REGION, {prefix}_AWS_ACCESS_KEY_ID,
+           {prefix}_AWS_SECRET_ACCESS_KEY, {prefix}_AWS_SESSION_TOKEN.
+    Falls back to AWS_REGION / AWS_DEFAULT_REGION for the region.
+    """
+    p = env_prefix
     region_name = (
-        os.getenv("BEDROCK_AWS_REGION")
+        os.getenv(f"{p}_AWS_REGION")
         or os.getenv("AWS_REGION")
         or os.getenv("AWS_DEFAULT_REGION")
     )
-    access_key_id = os.getenv("BEDROCK_AWS_ACCESS_KEY_ID")
-    secret_access_key = os.getenv("BEDROCK_AWS_SECRET_ACCESS_KEY")
-    session_token = os.getenv("BEDROCK_AWS_SESSION_TOKEN")
+    access_key_id = os.getenv(f"{p}_AWS_ACCESS_KEY_ID")
+    secret_access_key = os.getenv(f"{p}_AWS_SECRET_ACCESS_KEY")
+    session_token = os.getenv(f"{p}_AWS_SESSION_TOKEN")
 
     client_kwargs: dict[str, Any] = {"region_name": region_name}
     if access_key_id and secret_access_key:
@@ -110,6 +117,7 @@ class JsonPromptExtractor:
     schema: dict[str, Any]
     few_shot_messages: list[BaseMessage]
     provider: str
+    bedrock_env_prefix: str = "BEDROCK"
 
     def invoke(self, payload: dict[str, str]) -> dict[str, Any]:
         query = payload["query"]
@@ -135,8 +143,9 @@ class JsonPromptExtractor:
         return _parse_json_response(_message_text(response))
 
     def _invoke_bedrock(self, query: str) -> dict[str, Any]:
-        model_id = os.getenv("BEDROCK_MODEL_ID", _DEFAULT_BEDROCK_MODEL)
-        client = _bedrock_client()
+        p = self.bedrock_env_prefix
+        model_id = os.getenv(f"{p}_MODEL_ID", _DEFAULT_BEDROCK_MODEL)
+        client = _bedrock_client(env_prefix=p)
         response = client.converse(
             modelId=model_id,
             messages=[

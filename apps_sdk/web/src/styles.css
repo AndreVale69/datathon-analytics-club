@@ -190,6 +190,15 @@ body {
   font-weight: 500;
 }
 
+.soft-match-badge {
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: #e6f9f0;
+  color: #1a8f57;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
 /* ── Image overlay ── */
 .image-overlay {
   position: absolute;

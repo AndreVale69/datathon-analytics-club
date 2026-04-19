@@ -209,6 +209,7 @@ class RankedListingResult(BaseModel):
     score: float
     reason: str
     listing: ListingData
+    matched_soft_features: list[str] = Field(default_factory=list)
 
 
 class ListingsResponse(BaseModel):

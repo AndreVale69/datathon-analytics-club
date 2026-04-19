@@ -142,6 +142,7 @@ def _get_extractor():
             schema=_SCHEMA,
             few_shot_messages=[],
             provider="bedrock",
+            bedrock_env_prefix="DESC_BEDROCK",
         )
     return _extractor
 
