@@ -7,9 +7,9 @@ from app.core.hard_filters import _distance_km
 from app.models.schemas import HardFilters, ListingData, RankedListingResult
 
 
-_W_GEO             = 0.55  # fixed geo share when geo is active
-_W_SOFT_MAX_GEO    = 0.25  # max soft share when geo is active   → query_min = 0.20
-_W_SOFT_MAX_NO_GEO = 0.80  # max soft share when geo is absent   → query_min = 0.20
+_W_GEO             = 0.60  # fixed geo share when geo is active
+_W_SOFT_MAX_GEO    = 0.30  # max soft share when geo is active   → query_min = 0.10
+_W_SOFT_MAX_NO_GEO = 0.90  # max soft share when geo is absent   → query_min = 0.10
 
 # Number of active soft criteria at which soft_factor reaches 1.0 (full soft weight).
 # Below this, the soft weight scales linearly and the surplus goes to query.
@@ -41,21 +41,26 @@ def rank_listings(
 def _weights(soft: HardFilters, hard: HardFilters) -> tuple[float, float, float]:
     """Return (w_query, w_geo, w_soft) that always sum to 1.0.
 
-    soft_factor scales the soft weight linearly from 0 (no soft criteria) to
-    1 (N_SOFT_SAT or more criteria active), with the surplus redistributed to query.
+    As soon as any constraint is active (geo or soft), semantic is fixed at 0.10.
+    The remaining 0.90 goes entirely to geo+soft:
+      - geo active: soft scales with soft_factor (up to _W_SOFT_MAX_GEO), geo takes the rest.
+      - no geo: soft takes the full 0.90.
+    With no constraints at all, semantic gets 1.0.
     """
     n = _count_soft_constraints(soft)
-    soft_factor = min(1.0, n / _N_SOFT_SAT) if n > 0 else 0.0
-
     use_geo = _has_geo_target(hard) or _has_geo_target(soft)
+
+    if not use_geo and n == 0:
+        return 1.0, 0.0, 0.0
+
+    w_query = 0.10
     if use_geo:
-        w_soft  = _W_SOFT_MAX_GEO * soft_factor
-        w_geo   = _W_GEO
-        w_query = 1.0 - w_geo - w_soft
+        soft_factor = min(1.0, n / _N_SOFT_SAT) if n > 0 else 0.0
+        w_soft = _W_SOFT_MAX_GEO * soft_factor
+        w_geo  = 0.90 - w_soft
     else:
-        w_soft  = _W_SOFT_MAX_NO_GEO * soft_factor
-        w_geo   = 0.0
-        w_query = 1.0 - w_soft
+        w_soft = 0.90
+        w_geo  = 0.0
 
     return w_query, w_geo, w_soft
 
@@ -164,31 +169,99 @@ def _soft_score(listing: dict[str, Any], soft: HardFilters) -> float:
 
 
 def _reason(listing: dict[str, Any], soft: HardFilters, hard: HardFilters, query_sim: float = 0.0) -> str:
-    parts = []
-
     w_query, w_geo, w_soft = _weights(soft, hard)
     q      = max(0.0, min(1.0, query_sim))
     geo    = _geo_score(listing, soft, hard)
     soft_s = _soft_score(listing, soft)
 
-    parts.append(f"semantic {q:.0%}")
-    parts.append(f"geo {geo:.0%}")
-    parts.append(f"soft {soft_s:.0%}")
+    parts: list[str] = []
 
+    # ── Dominant factor ───────────────────────────────────────────────────────
+    contributions = {"query": w_query * q, "geo": w_geo * geo, "soft": w_soft * soft_s}
+    dominant = max(contributions, key=contributions.__getitem__)
+    if dominant == "query" and q >= 0.5:
+        parts.append(f"Strong match with your search description ({q:.0%} similarity)")
+    elif dominant == "geo" and geo >= 0.5:
+        parts.append("Excellent location match")
+    elif dominant == "soft" and soft_s >= 0.5:
+        parts.append("Matches most of your preferences")
+
+    # ── Location details ──────────────────────────────────────────────────────
     lat = listing.get("latitude")
     lon = listing.get("longitude")
-    if lat is not None and lon is not None and geo > 0.0:
+    if lat is not None and lon is not None and (w_geo > 0 or _has_geo_target(hard) or _has_geo_target(soft)):
         target = hard if _has_geo_target(hard) else soft
         dist_km = _nearest_target_distance(lat, lon, target)
         if dist_km is not None:
-            parts.append(f"{dist_km:.1f} km")
+            if dist_km < 0.5:
+                parts.append(f"Within walking distance of target ({dist_km:.2f} km)")
+            elif dist_km < 2.0:
+                parts.append(f"Very close to target area ({dist_km:.1f} km)")
+            else:
+                parts.append(f"{dist_km:.1f} km from target area")
 
+    # ── Soft constraint details ───────────────────────────────────────────────
+    cat   = listing.get("object_category") or ""
     price = listing.get("price")
-    area = listing.get("area")
+    rooms = listing.get("rooms")
+    area  = listing.get("area")
+
+    if soft.max_price and price:
+        if price <= soft.max_price:
+            parts.append(f"Price {price:,} CHF fits your budget of {soft.max_price:,} CHF")
+        else:
+            parts.append(f"Price {price:,} CHF slightly over budget ({soft.max_price:,} CHF)")
+
+    if soft.min_rooms and rooms:
+        if rooms >= soft.min_rooms:
+            parts.append(f"{rooms} rooms matches your requirement of {soft.min_rooms}+")
+        else:
+            parts.append(f"{rooms} rooms (you asked for {soft.min_rooms}+)")
+
+    if soft.min_area and area:
+        if area >= soft.min_area:
+            parts.append(f"{area:.0f} m² meets your minimum of {soft.min_area:.0f} m²")
+        else:
+            parts.append(f"{area:.0f} m² (below your target of {soft.min_area:.0f} m²)")
+
+    if soft.city:
+        city_val = listing.get("city") or ""
+        if any(city_val.lower() == c.lower() for c in soft.city):
+            parts.append(f"Located in {city_val} as requested")
+
+    if soft.features:
+        matched = [f for f in soft.features if listing.get(f"feature_{f}") == 1]
+        missing = [f for f in soft.features if listing.get(f"feature_{f}") != 1]
+        if matched:
+            parts.append(f"Has requested features: {', '.join(matched)}")
+        if missing:
+            parts.append(f"Missing features: {', '.join(missing)}")
+
+    if getattr(soft, "furnished", None):
+        parts.append("Furnished as requested" if cat == "Möblierte Wohnung" else "Listed as unfurnished")
+
+    if getattr(soft, "garden", None):
+        parts.append("House type — likely has a garden" if cat in _HOUSE_CATEGORIES else "No private garden (apartment)")
+
+    min_bed = getattr(soft, "min_bedrooms", None)
+    if min_bed and rooms:
+        est = max(0, int(rooms - 1))
+        parts.append(f"~{est} estimated bedroom(s) (you asked for {min_bed}+)")
+
+    if getattr(soft, "rooftop", None):
+        parts.append("Rooftop / Dachterrasse access" if cat in _ROOFTOP_CATEGORIES else "No rooftop access indicated")
+
+    if getattr(soft, "terrace", None):
+        parts.append("Has terrace" if cat in _TERRACE_CATEGORIES else "No dedicated terrace indicated")
+
+    # ── Always-on facts ───────────────────────────────────────────────────────
     if price and area:
         parts.append(f"{round(price / area, 1)} CHF/m²")
 
-    return "; ".join(parts)
+    if not parts:
+        parts.append(f"General match to your query ({q:.0%} similarity)")
+
+    return ". ".join(parts) + "."
 
 
 def _has_geo_target(target: HardFilters) -> bool:
