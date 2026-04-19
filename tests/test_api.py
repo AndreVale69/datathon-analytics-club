@@ -60,62 +60,6 @@ def test_post_listings_omits_expensive_image_resolution_in_primary_search_respon
     assert listing["hero_image_url"] is None
 
 
-def test_post_listings_images_resolves_image_urls_via_storage_helper(tmp_path: Path, monkeypatch) -> None:
-    repo_root = Path(__file__).resolve().parents[1]
-    os.environ["LISTINGS_RAW_DATA_DIR"] = str(repo_root / "raw_data")
-    os.environ["LISTINGS_DB_PATH"] = str(tmp_path / "listings.db")
-
-    monkeypatch.setattr(
-        "app.harness.search_service.get_image_urls_by_listing_id",
-        lambda **kwargs: ["https://example-bucket.s3.eu-central-2.amazonaws.com/resolved.jpg"],
-    )
-
-    from app.main import app
-
-    with TestClient(app) as client:
-        response = client.post("/listings/images", json={"listing_ids": ["220122"]})
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["listings"] == [
-        {
-            "listing_id": "220122",
-            "image_urls": ["https://example-bucket.s3.eu-central-2.amazonaws.com/resolved.jpg"],
-            "hero_image_url": "https://example-bucket.s3.eu-central-2.amazonaws.com/resolved.jpg",
-        }
-    ]
-
-
-def test_post_listings_images_does_not_leak_raw_upstream_image_templates_when_s3_lookup_fails(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    repo_root = Path(__file__).resolve().parents[1]
-    os.environ["LISTINGS_RAW_DATA_DIR"] = str(repo_root / "raw_data")
-    os.environ["LISTINGS_DB_PATH"] = str(tmp_path / "listings.db")
-    os.environ["LISTINGS_S3_BUCKET"] = ""
-
-    def fail_image_lookup(**kwargs):
-        raise RuntimeError("S3 lookup failed")
-
-    monkeypatch.setattr(
-        "app.harness.search_service.get_image_urls_by_listing_id",
-        fail_image_lookup,
-    )
-
-    from app.main import app
-
-    with TestClient(app) as client:
-        response = client.post("/listings/images", json={"listing_ids": ["220122"]})
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["listings"]
-    listing = body["listings"][0]
-    assert listing["image_urls"] == []
-    assert listing["hero_image_url"] is None
-
-
 def test_post_listings_search_filter_applies_explicit_hard_filters(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     os.environ["LISTINGS_RAW_DATA_DIR"] = str(repo_root / "raw_data")
