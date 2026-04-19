@@ -21,15 +21,22 @@ def _json_instruction(schema: dict[str, Any]) -> str:
     )
 
 
-def _bedrock_client():
+def _bedrock_client(env_prefix: str = "BEDROCK"):
+    """Build a boto3 bedrock-runtime client from env vars with the given prefix.
+
+    Reads: {prefix}_AWS_REGION, {prefix}_AWS_ACCESS_KEY_ID,
+           {prefix}_AWS_SECRET_ACCESS_KEY, {prefix}_AWS_SESSION_TOKEN.
+    Falls back to AWS_REGION / AWS_DEFAULT_REGION for the region.
+    """
+    p = env_prefix
     region_name = (
-        os.getenv("BEDROCK_AWS_REGION")
+        os.getenv(f"{p}_AWS_REGION")
         or os.getenv("AWS_REGION")
         or os.getenv("AWS_DEFAULT_REGION")
     )
-    access_key_id = os.getenv("BEDROCK_AWS_ACCESS_KEY_ID")
-    secret_access_key = os.getenv("BEDROCK_AWS_SECRET_ACCESS_KEY")
-    session_token = os.getenv("BEDROCK_AWS_SESSION_TOKEN")
+    access_key_id = os.getenv(f"{p}_AWS_ACCESS_KEY_ID")
+    secret_access_key = os.getenv(f"{p}_AWS_SECRET_ACCESS_KEY")
+    session_token = os.getenv(f"{p}_AWS_SESSION_TOKEN")
 
     client_kwargs: dict[str, Any] = {"region_name": region_name}
     if access_key_id and secret_access_key:
@@ -112,6 +119,7 @@ class JsonPromptExtractor:
     provider: str
     openai_model: str
     bedrock_model_id: str
+    bedrock_env_prefix: str = "BEDROCK"
 
     def invoke(self, payload: dict[str, str]) -> dict[str, Any]:
         query = payload["query"]
@@ -136,7 +144,8 @@ class JsonPromptExtractor:
         return _parse_json_response(_message_text(response))
 
     def _invoke_bedrock(self, query: str) -> dict[str, Any]:
-        client = _bedrock_client()
+        p = self.bedrock_env_prefix
+        client = _bedrock_client(env_prefix=p)
         response = client.converse(
             modelId=self.bedrock_model_id,
             messages=[
@@ -223,6 +232,7 @@ def build_json_prompt_extractor(
     default_provider: str = "openai",
     default_openai_model: str = _DEFAULT_OPENAI_MODEL,
     default_bedrock_model: str = _DEFAULT_BEDROCK_MODEL,
+    bedrock_env_prefix: str = "BEDROCK",
 ) -> JsonPromptExtractor:
     provider = os.getenv(provider_env_var, default_provider).strip().lower() or default_provider
     return JsonPromptExtractor(
@@ -232,6 +242,7 @@ def build_json_prompt_extractor(
         provider=provider,
         openai_model=os.getenv(openai_model_env_var, default_openai_model),
         bedrock_model_id=os.getenv(bedrock_model_env_var, default_bedrock_model),
+        bedrock_env_prefix=bedrock_env_prefix,
     )
 
 
