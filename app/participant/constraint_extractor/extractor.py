@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import functools
 from concurrent.futures import ThreadPoolExecutor
 import json
 import logging
@@ -159,6 +160,12 @@ _soft_extractor = None
 
 
 def extract_constraints(query: str) -> QueryConstraints:
+    """Public entry point — always returns a fresh deep copy so callers can mutate freely."""
+    return _extract_constraints_cached(query).model_copy(deep=True)
+
+
+@functools.lru_cache(maxsize=256)
+def _extract_constraints_cached(query: str) -> QueryConstraints:
     global _extractor, _hard_extractor, _soft_extractor
     try:
         if _extractor is not None:

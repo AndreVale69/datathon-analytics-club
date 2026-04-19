@@ -65,7 +65,7 @@ export default function App() {
       const res = await fetch(`${API_BASE}/listings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, limit: 500 }),
+        body: JSON.stringify({ query, limit: 25 }),
       });
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
