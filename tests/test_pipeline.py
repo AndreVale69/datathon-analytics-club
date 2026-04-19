@@ -1,5 +1,6 @@
 from app.models.schemas import HardFilters, QueryConstraints
 from app.participant.constraint_extractor import extract_constraints
+from app.participant.geolocation_extractor import GeolocationConstraints
 from app.participant.ranking import rank_listings
 from app.participant.soft_filtering import filter_soft_facts
 from app.harness.search_service import to_hard_filter_params
@@ -35,3 +36,29 @@ def test_harness_service_converts_hard_filters_to_search_params() -> None:
     assert params.features == ["balcony"]
     assert params.limit == 5
     assert params.offset == 2
+
+
+def test_extract_constraints_drops_unknown_feature_labels(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.participant.constraint_extractor.extractor._extractor",
+        type(
+            "StubExtractor",
+            (),
+            {
+                "invoke": staticmethod(
+                    lambda payload: {
+                        "hard": {"features": ["near_eth", "balcony"]},
+                        "soft": {},
+                    }
+                )
+            },
+        )(),
+    )
+    monkeypatch.setattr(
+        "app.participant.geolocation_extractor.extract_geolocation_constraints",
+        lambda query: GeolocationConstraints(),
+    )
+
+    result = extract_constraints("Apartments near ETH")
+
+    assert result.hard.features == ["balcony"]

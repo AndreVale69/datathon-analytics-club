@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import logging
-import os
 
 from pydantic import BaseModel, Field
 
 from app.core.geocoding import GeocodedPlace, geocode_places
 from app.models.schemas import GeoTarget, HardFilters, QueryConstraints
+from app.participant.llm_client import build_json_prompt_extractor
 
 logger = logging.getLogger(__name__)
 
@@ -78,21 +78,18 @@ class GeolocationConstraints(BaseModel):
 
 # Default radius when the user says "near" without a number
 _DEFAULT_RADIUS_KM = 3.0
+_extractor = None
 
 
 def extract_geolocation_constraints(query: str) -> GeolocationConstraints:
+    global _extractor
     try:
-        from langchain_core.prompts import ChatPromptTemplate
-        from langchain_openai import ChatOpenAI
-
-        model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-        llm = ChatOpenAI(model=model, temperature=0, seed=42).with_structured_output(
-            GeolocationConstraints.model_json_schema()
-        )
-        prompt = ChatPromptTemplate.from_messages(
-            [("system", _GEOLOCATION_SYSTEM_PROMPT), ("human", "{query}")]
-        )
-        raw = (prompt | llm).invoke({"query": query})
+        if _extractor is None:
+            _extractor = build_json_prompt_extractor(
+                system_prompt=_GEOLOCATION_SYSTEM_PROMPT,
+                schema=GeolocationConstraints.model_json_schema(),
+            )
+        raw = _extractor.invoke({"query": query})
         constraints = GeolocationConstraints(**raw)
         return constraints
     except Exception as exc:

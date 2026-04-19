@@ -54,6 +54,14 @@ Files:
 
 Important variables:
 
+- `AI_PROVIDER`: `openai` or `bedrock` for query understanding
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `BEDROCK_MODEL_ID`
+- `BEDROCK_AWS_REGION`
+- `BEDROCK_AWS_ACCESS_KEY_ID`
+- `BEDROCK_AWS_SECRET_ACCESS_KEY`
+- `BEDROCK_AWS_SESSION_TOKEN`
 - `LISTINGS_RAW_DATA_DIR`: location of the extracted challenge data
 - `LISTINGS_DB_PATH`: SQLite database path used by the API bootstrap
 - `LISTINGS_S3_BUCKET`
@@ -74,6 +82,16 @@ cp .env.example .env.local
 Then edit `.env.local` and set the values you want to use locally:
 
 ```dotenv
+AI_PROVIDER=openai
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4o-mini
+
+BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
+BEDROCK_AWS_REGION=
+BEDROCK_AWS_ACCESS_KEY_ID=
+BEDROCK_AWS_SECRET_ACCESS_KEY=
+BEDROCK_AWS_SESSION_TOKEN=
+
 LISTINGS_RAW_DATA_DIR=raw_data
 LISTINGS_DB_PATH=data/listings.db
 
@@ -88,6 +106,91 @@ APPS_SDK_PORT=8001
 MCP_ALLOWED_HOSTS=
 MCP_ALLOWED_ORIGINS=
 ```
+
+Provider notes:
+
+- `AI_PROVIDER=openai`: uses `OPENAI_API_KEY` and `OPENAI_MODEL`
+- `AI_PROVIDER=bedrock`: uses `BEDROCK_MODEL_ID` plus either dedicated `BEDROCK_AWS_*` credentials or the standard AWS credential chain
+- `BEDROCK_AWS_REGION` is optional; if empty, the app falls back to `AWS_REGION` or `AWS_DEFAULT_REGION`
+
+Hackathon-available Bedrock models:
+
+- All Amazon models
+  Recommended text models for this repo:
+  `us.amazon.nova-micro-v1:0`, `us.amazon.nova-lite-v1:0`
+- Anthropic Claude Sonnet 4.5
+  In-Region model ID: `anthropic.claude-sonnet-4-5-20250929-v1:0`
+  US inference profile: `us.anthropic.claude-sonnet-4-5-20250929-v1:0`
+  EU inference profile: `eu.anthropic.claude-sonnet-4-5-20250929-v1:0`
+- Anthropic Claude Opus 4.5
+  In-Region model ID: `anthropic.claude-opus-4-5-20251101-v1:0`
+  US inference profile: `us.anthropic.claude-opus-4-5-20251101-v1:0`
+  EU inference profile: `eu.anthropic.claude-opus-4-5-20251101-v1:0`
+- Meta Llama 4 Maverick 17B Instruct
+  In-Region model ID: `meta.llama4-maverick-17b-instruct-v1:0`
+  US inference profile: `us.meta.llama4-maverick-17b-instruct-v1:0`
+- Mistral Pixtral Large (25.02)
+  In-Region model ID: `mistral.pixtral-large-2502-v1:0`
+  US inference profile: `us.mistral.pixtral-large-2502-v1:0`
+  EU inference profile: `eu.mistral.pixtral-large-2502-v1:0`
+- Stable Diffusion 3.5 Large
+  Model ID: `stability.sd3-5-large-v1:0`
+
+Notes:
+
+- Some Bedrock models require an inference profile instead of direct on-demand invocation. In this hackathon setup, `us.anthropic.claude-sonnet-4-5-20250929-v1:0` worked, while the plain Sonnet 4.5 model ID did not.
+- Actual runtime access still depends on the permissions attached to the workshop AWS role. A model can be listed as available for the hackathon and still be blocked for a specific participant role by IAM policy.
+
+### Switch Between OpenAI And AWS Bedrock
+
+To use OpenAI locally:
+
+```dotenv
+AI_PROVIDER=openai
+OPENAI_API_KEY=your_openai_key
+OPENAI_MODEL=gpt-4o-mini
+```
+
+To switch to AWS Bedrock:
+
+```dotenv
+AI_PROVIDER=bedrock
+BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
+BEDROCK_AWS_REGION=us-west-2
+
+AWS_ACCESS_KEY_ID=your_aws_access_key_id
+AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key
+AWS_DEFAULT_REGION=us-west-2
+```
+
+Notes:
+
+- You only need one provider active at a time.
+- When `AI_PROVIDER=bedrock`, the app ignores `OPENAI_API_KEY`.
+- When `AI_PROVIDER=openai`, the app ignores the Bedrock model setting.
+- If you are inside the AWS workshop environment, credentials may already be injected into the shell or attached role, so you might only need `AI_PROVIDER=bedrock` and `BEDROCK_MODEL_ID`.
+
+If you need one AWS credential set for S3 images and a different one for Bedrock, keep the image credentials in the standard AWS variables and put the Bedrock credentials in the dedicated Bedrock variables:
+
+```dotenv
+AI_PROVIDER=bedrock
+
+AWS_ACCESS_KEY_ID=images_key
+AWS_SECRET_ACCESS_KEY=images_secret
+AWS_SESSION_TOKEN=images_session_token
+AWS_DEFAULT_REGION=us-west-2
+
+BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
+BEDROCK_AWS_REGION=us-west-2
+BEDROCK_AWS_ACCESS_KEY_ID=bedrock_key
+BEDROCK_AWS_SECRET_ACCESS_KEY=bedrock_secret
+BEDROCK_AWS_SESSION_TOKEN=bedrock_session_token
+```
+
+In that setup:
+
+- S3 image access uses `AWS_*`
+- Bedrock uses `BEDROCK_AWS_*`
 
 Leave `MCP_ALLOWED_HOSTS` and `MCP_ALLOWED_ORIGINS` empty for normal local development. Only set them when you have a real public host and want stricter request validation.
 
