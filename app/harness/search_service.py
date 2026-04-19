@@ -96,6 +96,21 @@ def to_hard_filter_params(hard_facts: HardFilters) -> HardFilterParams:
     )
 
 
+def resolve_listing_images(*, db_path: Path, listing_ids: list[str]) -> list[dict[str, Any]]:
+    def _fetch_one(listing_id: str) -> dict[str, Any]:
+        try:
+            image_urls = get_image_urls_by_listing_id(db_path=db_path, listing_id=listing_id)
+        except Exception:
+            image_urls = []
+        return {
+            "listing_id": listing_id,
+            "image_urls": image_urls,
+            "hero_image_url": image_urls[0] if image_urls else None,
+        }
+
+    return list(_HYDRATE_POOL.map(_fetch_one, listing_ids))
+
+
 def _hydrate_candidate_image_urls(candidates: list[dict[str, Any]], *, db_path: Path) -> None:
     def _fetch_one(candidate: dict[str, Any]) -> None:
         listing_id = candidate.get("listing_id")
