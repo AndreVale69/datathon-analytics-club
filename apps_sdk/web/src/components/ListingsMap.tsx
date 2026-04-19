@@ -163,15 +163,12 @@ export default function ListingsMap({
 
       applyPinStyle(inner, hoveredId === result.listing_id);
 
-      const price = result.listing.price_chf
-        ? new Intl.NumberFormat("de-CH", { style: "currency", currency: "CHF", maximumFractionDigits: 0 }).format(result.listing.price_chf)
-        : null;
-      const rooms = result.listing.rooms ? `${result.listing.rooms} rooms` : null;
+      const title = result.listing.title;
       const street = result.listing.street ?? result.listing.city ?? null;
 
       const popup = new maplibregl.Popup({ offset: 52, closeButton: false, className: "robin-popup" })
         .setHTML(`
-          <div class="robin-popup-title">${[price, rooms].filter(Boolean).join(" · ")}</div>
+          <div class="robin-popup-title">${title}</div>
           ${street ? `<div class="robin-popup-meta">${street}</div>` : ""}
         `);
 

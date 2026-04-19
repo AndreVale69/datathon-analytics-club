@@ -395,39 +395,58 @@ body {
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 8px;
-  padding: 8px 8px 8px 16px;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
   background: #ffffff;
-  border-radius: 999px;
+  border-radius: 22px;
   box-shadow: 0 8px 32px rgba(92, 92, 224, 0.18);
-  width: 500px;
+  width: min(720px, calc(100vw - 32px));
   transition: all 0.3s ease;
   border: 1.5px solid rgba(92, 92, 224, 0.15);
 }
 
-.floating-search input {
+.floating-search textarea {
   flex: 1;
   border: none;
   outline: none;
-  font-size: 0.95rem;
+  resize: none;
+  min-height: 28px;
+  max-height: 120px;
+  padding: 2px 2px;
+  font-size: 0.98rem;
+  line-height: 24px;
   color: #111111;
   background: transparent;
+  font-family: inherit;
+  overflow-y: hidden;
 }
 
-.floating-search input::placeholder {
+.floating-search textarea::placeholder {
   color: #aaaaaa;
+}
+
+.floating-search textarea::-webkit-scrollbar {
+  width: 6px;
+}
+
+.floating-search textarea::-webkit-scrollbar-thumb {
+  background: rgba(92, 92, 224, 0.22);
+  border-radius: 999px;
 }
 
 .floating-search button {
   background: #5c5ce0;
   color: #ffffff;
-  border: none;
-  border-radius: 999px;
-  padding: 8px 20px;
+  border: 1px solid rgba(92, 92, 224, 0.14);
+  border-radius: 16px;
+  min-height: 48px;
+  padding: 0 18px;
   font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s ease, transform 0.1s ease;
+  flex-shrink: 0;
 }
 
 .floating-search button:hover {
@@ -437,7 +456,7 @@ body {
 
 .floating-search.open {
   bottom: 10px;
-  width: 380px;
+  width: min(560px, calc(100vw - 48px));
 }
 
 /* ── Close sidebar button ── */
@@ -766,5 +785,11 @@ body {
 
   .floating-search {
     width: calc(100% - 32px);
+    bottom: 12px;
+    padding: 10px;
+  }
+
+  .floating-search button {
+    padding: 10px 14px;
   }
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import RankedList from "./components/RankedList";
 import ListingsMap from "./components/ListingsMap";
 
@@ -35,6 +35,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId]   = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(10);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   async function search() {
     if (!query.trim()) return;
@@ -72,6 +73,20 @@ export default function App() {
     () => mappableResults.slice(0, visibleCount),
     [mappableResults, visibleCount],
   );
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = "0px";
+    const lineHeight = 24;
+    const maxRows = 5;
+    const maxHeight = lineHeight * maxRows;
+    const nextHeight = Math.min(textarea.scrollHeight, maxHeight);
+
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, [query]);
 
   return (
     <div className="app-shell">
@@ -148,12 +163,19 @@ export default function App() {
       )}
 
       <div className={`floating-search ${isOpen ? "open" : ""}`}>
-        <input
+        <textarea
+          ref={textareaRef}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Tell Robin what you're looking for…"
           disabled={loading}
-          onKeyDown={(e) => { if (e.key === "Enter") search(); }}
+          rows={1}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              void search();
+            }
+          }}
         />
         <button onClick={search} disabled={loading}>
           {loading ? <span className="btn-spinner" /> : "Search"}
