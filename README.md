@@ -1,6 +1,6 @@
 # Datathon Analytics Club
 
-link --> https://andre.jerboa-silverside.ts.net
+![Banner](assets/banner.jpeg)
 
 > **Security warning:** The API is currently configured with `allow_origins=["*"]` (open CORS) and has no authentication. This is intentional for local development and demo purposes only. Do **not** deploy this configuration to production — restrict CORS to specific origins and add authentication before any public-facing deployment.
 
