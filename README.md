@@ -2,6 +2,8 @@
 
 ![Banner](assets/banner.jpeg)
 
+> Note: in the banner and in the recorded demo, some listing photos are unavailable because the S3 buckets used for challenge-hosted images were no longer accessible when these assets were captured after the hackathon.
+
 Real-estate listing search and ranking prototype built for the [Datathon 2026](https://www.datathon.ai/) hackathon by the Analytics Club at ETH Zurich.
 
 This repository is our submission for the [RobinReal](https://robinreal.ai/) challenge track. The core objective was to turn a natural-language housing request into a ranked shortlist of relevant Swiss real-estate listings while respecting strict user constraints such as budget, location, rooms, availability, and required features.
@@ -11,8 +13,9 @@ This repository is our submission for the [RobinReal](https://robinreal.ai/) cha
 - [1. Overview](#1-overview)
   - [1.1 Challenge Context](#11-challenge-context)
   - [1.2 What We Built](#12-what-we-built)
-  - [1.3 Hackathon Scope](#13-hackathon-scope)
-  - [1.4 AWS Side Challenge](#14-aws-side-challenge)
+  - [1.3 Demo Assets](#13-demo-assets)
+  - [1.4 Hackathon Scope](#14-hackathon-scope)
+  - [1.5 AWS Side Challenge](#15-aws-side-challenge)
 - [2. Architecture](#2-architecture)
   - [2.1 System View](#21-system-view)
   - [2.2 Request Pipeline](#22-request-pipeline)
@@ -68,7 +71,14 @@ In practical terms, a user can type a request such as "bright apartment near ETH
 3. score the remaining candidates using semantic similarity, geo proximity, price and room fit, and extracted descriptive signals such as brightness, quietness, modernity, layout, family friendliness, and other lifestyle attributes
 4. return a ranked list with a score, a short reason, listing metadata, and optional image and map support
 
-### 1.3 Hackathon Scope
+### 1.3 Demo Assets
+
+- banner preview: [assets/banner.jpeg](assets/banner.jpeg)
+- recorded demo: [assets/demo.mp4](assets/demo.mp4)
+
+Both assets were produced after the challenge. The map, ranking flow, and query experience are representative of the product, but some listing photos are missing in those media because the original S3-backed image buckets were down or inaccessible at capture time.
+
+### 1.4 Hackathon Scope
 
 Our implementation focuses on the exact problem framing from the Datathon brief: `user query -> hard filters -> candidate listings -> relevance ranking`.
 
@@ -80,7 +90,7 @@ Concretely, we:
 - added explanation and image endpoints so search results are easier to interpret in a demo setting
 - built a lightweight React map interface and an Apps SDK / MCP wrapper so the search experience can also be demonstrated as an interactive tool
 
-### 1.4 AWS Side Challenge
+### 1.5 AWS Side Challenge
 
 The selected side challenge was the AWS track. In this repository, that work shows up in the infrastructure and model-provider choices:
 
