@@ -4,7 +4,7 @@
 
 Real-estate listing search and ranking prototype built for the [Datathon 2026](https://www.datathon.ai/) hackathon by the Analytics Club at ETH Zurich.
 
-This repository is our submission for the RobinReal challenge track. The core objective was to turn a natural-language housing request into a ranked shortlist of relevant Swiss real-estate listings while respecting strict user constraints such as budget, location, rooms, availability, and required features.
+This repository is our submission for the [RobinReal](https://robinreal.ai/) challenge track. The core objective was to turn a natural-language housing request into a ranked shortlist of relevant Swiss real-estate listings while respecting strict user constraints such as budget, location, rooms, availability, and required features.
 
 ## Table of Contents
 
