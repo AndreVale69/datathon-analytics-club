@@ -179,19 +179,6 @@ class ListingsSearchRequest(BaseModel):
     hard_filters: HardFilters | None = None
 
 
-class ListingImagesRequest(BaseModel):
-    listing_ids: list[str] = Field(min_length=1, max_length=100)
-
-
-class ListingImagesPayload(BaseModel):
-    listing_id: str
-    image_urls: list[str] = Field(default_factory=list)
-    hero_image_url: str | None = None
-
-
-class ListingImagesResponse(BaseModel):
-    listings: list[ListingImagesPayload] = Field(default_factory=list)
-
 
 class ListingExplanationRequest(BaseModel):
     query: str = Field(min_length=1)

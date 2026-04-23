@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,11 @@ from app.participant.ranking import rank_listings
 from app.participant.soft_filtering import filter_soft_facts
 from app.participant.description_analysis import compute_query_similarities
 from app.participant.description_extractor import extract_features_from_descriptions
+
+# Per-candidate image hydration runs in parallel (each fetch is independent I/O).
+_HYDRATE_POOL = ThreadPoolExecutor(max_workers=8, thread_name_prefix="img-hydrate")
+# Pipeline-level pool: runs image hydration and similarity computation concurrently.
+_PIPELINE_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="pipeline")
 
 
 def query_from_text(
@@ -26,9 +32,13 @@ def query_from_text(
     constraints.hard.offset = offset
 
     candidates = search_listings(db_path, to_hard_filter_params(constraints.hard))
-    _clear_candidate_image_urls(candidates)
 
-    query_similarities = compute_query_similarities(query, candidates)
+    # Image hydration and similarity computation are independent — run in parallel.
+    img_future = _PIPELINE_POOL.submit(_hydrate_candidate_image_urls, candidates, db_path=db_path)
+    sim_future = _PIPELINE_POOL.submit(compute_query_similarities, query, candidates)
+    query_similarities = sim_future.result()
+    img_future.result()
+
     extracted_features = extract_features_from_descriptions(candidates, query_similarities)
 
     return ListingsResponse(
@@ -86,36 +96,16 @@ def to_hard_filter_params(hard_facts: HardFilters) -> HardFilterParams:
     )
 
 
-def resolve_listing_images(
-    *,
-    db_path: Path,
-    listing_ids: list[str],
-) -> list[dict[str, Any]]:
-    resolved: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for listing_id in listing_ids:
-        cleaned = str(listing_id).strip()
-        if not cleaned or cleaned in seen:
-            continue
-        seen.add(cleaned)
+def _hydrate_candidate_image_urls(candidates: list[dict[str, Any]], *, db_path: Path) -> None:
+    def _fetch_one(candidate: dict[str, Any]) -> None:
+        listing_id = candidate.get("listing_id")
+        if not listing_id:
+            return
         try:
-            image_urls = get_image_urls_by_listing_id(
-                db_path=db_path,
-                listing_id=cleaned,
-            )
+            image_urls = get_image_urls_by_listing_id(db_path=db_path, listing_id=str(listing_id))
         except Exception:
             image_urls = []
-        resolved.append(
-            {
-                "listing_id": cleaned,
-                "image_urls": image_urls,
-                "hero_image_url": image_urls[0] if image_urls else None,
-            }
-        )
-    return resolved
+        candidate["image_urls"] = image_urls
+        candidate["hero_image_url"] = image_urls[0] if image_urls else None
 
-
-def _clear_candidate_image_urls(candidates: list[dict[str, Any]]) -> None:
-    for candidate in candidates:
-        candidate["image_urls"] = []
-        candidate["hero_image_url"] = None
+    list(_HYDRATE_POOL.map(_fetch_one, candidates))

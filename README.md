@@ -1,5 +1,7 @@
 # Datathon Analytics Club
 
+![Banner](assets/banner.jpeg)
+
 > **Security warning:** The API is currently configured with `allow_origins=["*"]` (open CORS) and has no authentication. This is intentional for local development and demo purposes only. Do **not** deploy this configuration to production — restrict CORS to specific origins and add authentication before any public-facing deployment.
 
 This repository is a starter implementation for the Datathon 2026 real-estate search challenge: parse a natural-language housing query, apply hard constraints, and rank valid listings by soft relevance.

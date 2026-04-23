@@ -29,12 +29,6 @@ type ToolResultPayload = {
   listings?: RankedListingResult[];
 };
 
-type ListingImagesPayload = {
-  listing_id: string;
-  image_urls: string[];
-  hero_image_url?: string | null;
-};
-
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
 export default function App() {
@@ -47,11 +41,9 @@ export default function App() {
   const [hoveredId, setHoveredId]   = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(10);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const requestedImageIdsRef = useRef<Set<string>>(new Set());
 
   function applyToolResult(payload: ToolResultPayload) {
     const listings = Array.isArray(payload.listings) ? payload.listings : [];
-    requestedImageIdsRef.current = new Set();
     setQuery(typeof payload.query === "string" ? payload.query : "");
     setResults(listings);
     setError(null);
@@ -69,12 +61,11 @@ export default function App() {
     setIsOpen(true);
     setResults([]);
     setVisibleCount(10);
-    requestedImageIdsRef.current = new Set();
     try {
       const res = await fetch(`${API_BASE}/listings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, limit: 500 }),
+        body: JSON.stringify({ query, limit: 25 }),
       });
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
@@ -99,65 +90,6 @@ export default function App() {
     () => mappableResults.slice(0, visibleCount),
     [mappableResults, visibleCount],
   );
-
-  useEffect(() => {
-    const listingIds = visibleResults
-      .map((result) => result.listing_id)
-      .filter((listingId) => {
-        const listing = results.find((item) => item.listing_id === listingId)?.listing;
-        if (!listing) return false;
-        const hasImages = Boolean(listing.hero_image_url) || Boolean(listing.image_urls?.length);
-        return !hasImages && !requestedImageIdsRef.current.has(listingId);
-      });
-
-    if (!listingIds.length) return;
-
-    for (const listingId of listingIds) {
-      requestedImageIdsRef.current.add(listingId);
-    }
-
-    let cancelled = false;
-
-    async function loadVisibleImages() {
-      try {
-        const res = await fetch(`${API_BASE}/listings/images`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ listing_ids: listingIds }),
-        });
-        if (!res.ok) throw new Error(`Server error: ${res.status}`);
-        const data = await res.json();
-        if (cancelled) return;
-
-        const resolved = new Map<string, ListingImagesPayload>(
-          (data.listings ?? []).map((item: ListingImagesPayload) => [item.listing_id, item]),
-        );
-
-        setResults((current) =>
-          current.map((item) => {
-            const images = resolved.get(item.listing_id);
-            if (!images) return item;
-            return {
-              ...item,
-              listing: {
-                ...item.listing,
-                image_urls: images.image_urls,
-                hero_image_url: images.hero_image_url ?? null,
-              },
-            };
-          }),
-        );
-      } catch {
-        if (cancelled) return;
-      }
-    }
-
-    void loadVisibleImages();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [results, visibleResults]);
 
   useEffect(() => {
     const textarea = textareaRef.current;
