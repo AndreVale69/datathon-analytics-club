@@ -766,6 +766,14 @@ Run the full test suite:
 uv run pytest
 ```
 
+Run the tests with Docker Compose:
+
+```bash
+docker compose --profile test run --rm tests
+```
+
+This is the easiest containerized option if you want the test environment to match the Compose setup more closely.
+
 Run a focused subset:
 
 ```bash
