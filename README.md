@@ -352,11 +352,12 @@ Suggested `.env.local` workflow:
 1. Copy `.env.example` to `.env.local`.
 2. Set `LISTINGS_RAW_DATA_DIR` if your dataset is not in `raw_data/`.
 3. Decide whether each LLM stage should use `openai` or `bedrock`.
-4. Add the credentials for the providers you selected.
-5. Add S3 values only if you need image retrieval for listings stored in the challenge bucket.
-6. Adjust the Apps SDK URLs only if you are running the backend or widget on non-default ports or hosts.
+4. Choose the specific model for each stage using the corresponding `*_OPENAI_MODEL` or `*_BEDROCK_MODEL_ID` variable.
+5. Add the credentials for the providers you selected.
+6. Add S3 values only if you need image retrieval for listings stored in the challenge bucket.
+7. Adjust the Apps SDK URLs only if you are running the backend or widget on non-default ports or hosts.
 
-Provider-only examples:
+Configuration examples:
 
 - OpenAI-only setup:
 
@@ -364,10 +365,19 @@ Provider-only examples:
 OPENAI_API_KEY=your_openai_key
 
 HARD_CONSTRAINTS_PROVIDER=openai
+HARD_CONSTRAINTS_OPENAI_MODEL=gpt-5-mini
+
 SOFT_PREFERENCES_PROVIDER=openai
+SOFT_PREFERENCES_OPENAI_MODEL=gpt-5-mini
+
 GEOLOCATION_PROVIDER=openai
+GEOLOCATION_OPENAI_MODEL=gpt-5-mini
+
 DESCRIPTION_FEATURES_PROVIDER=openai
+DESCRIPTION_FEATURES_OPENAI_MODEL=gpt-5-mini
+
 EXPLANATION_PROVIDER=openai
+EXPLANATION_OPENAI_MODEL=gpt-5-mini
 
 LISTINGS_RAW_DATA_DIR=raw_data
 LISTINGS_DB_PATH=data/listings.db
@@ -382,10 +392,19 @@ APPS_SDK_PORT=8001
 
 ```env
 HARD_CONSTRAINTS_PROVIDER=bedrock
+HARD_CONSTRAINTS_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
+
 SOFT_PREFERENCES_PROVIDER=bedrock
+SOFT_PREFERENCES_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
+
 GEOLOCATION_PROVIDER=bedrock
+GEOLOCATION_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
+
 DESCRIPTION_FEATURES_PROVIDER=bedrock
+DESCRIPTION_FEATURES_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
+
 EXPLANATION_PROVIDER=bedrock
+EXPLANATION_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
 
 BEDROCK_AWS_REGION=your_region
 BEDROCK_AWS_ACCESS_KEY_ID=your_access_key
@@ -400,6 +419,45 @@ APPS_SDK_PORT=8001
 ```
 
   In this mode, `OPENAI_API_KEY` can be left empty or omitted from `.env.local`.
+
+- Mixed setup with custom models per stage:
+
+```env
+OPENAI_API_KEY=your_openai_key
+
+HARD_CONSTRAINTS_PROVIDER=openai
+HARD_CONSTRAINTS_OPENAI_MODEL=gpt-5-mini
+
+SOFT_PREFERENCES_PROVIDER=openai
+SOFT_PREFERENCES_OPENAI_MODEL=gpt-5-mini
+
+GEOLOCATION_PROVIDER=openai
+GEOLOCATION_OPENAI_MODEL=gpt-5-mini
+
+DESCRIPTION_FEATURES_PROVIDER=bedrock
+DESCRIPTION_FEATURES_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
+
+EXPLANATION_PROVIDER=bedrock
+EXPLANATION_BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
+
+BEDROCK_AWS_REGION=your_region
+BEDROCK_AWS_ACCESS_KEY_ID=your_access_key
+BEDROCK_AWS_SECRET_ACCESS_KEY=your_secret_key
+BEDROCK_AWS_SESSION_TOKEN=your_session_token
+
+LISTINGS_RAW_DATA_DIR=raw_data
+LISTINGS_DB_PATH=data/listings.db
+APPS_SDK_LISTINGS_API_BASE_URL=http://localhost:8000
+APPS_SDK_PUBLIC_BASE_URL=http://localhost:8001
+APPS_SDK_PORT=8001
+```
+
+  This is the most flexible mode. You can route each workload to the provider and model that performs best for that specific task.
+
+- **Practical rule**.
+  For each stage, set both:
+  the provider variable, for example `HARD_CONSTRAINTS_PROVIDER`
+  the matching model variable for that provider, for example `HARD_CONSTRAINTS_OPENAI_MODEL` or `HARD_CONSTRAINTS_BEDROCK_MODEL_ID`
 
 Tracked defaults live in [.env.example](.env.example).
 
