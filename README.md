@@ -1,4 +1,4 @@
-# Datathon Analytics Club
+# Datathon.ai 2026 - RobinReal Real-Estate Search
 
 ![Banner](assets/banner.jpeg)
 
