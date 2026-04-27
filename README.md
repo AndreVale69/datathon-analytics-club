@@ -75,10 +75,14 @@ In practical terms, a user can type a request such as "bright apartment near ETH
 
 - banner preview: [assets/banner.jpeg](assets/banner.jpeg)
 - recorded demo: [assets/demo.mp4](assets/demo.mp4)
+- YouTube demo: https://youtu.be/PMr42TStlro
 
 https://github.com/user-attachments/assets/0c90090a-700f-479c-a4a0-9204a6c33ceb
 
 Both assets were produced after the challenge. The map, ranking flow, and query experience are representative of the product, but some listing photos are missing in those media because the original S3-backed image buckets were down or inaccessible at capture time.
+
+> [!WARNING]
+> If the video preview is not visible on GitHub, open it directly on YouTube: https://youtu.be/PMr42TStlro
 
 ### 1.4 Hackathon Scope
 
